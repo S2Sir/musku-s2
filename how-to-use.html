@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0818">
+<title>MUSKU — How to Use</title>
+<link rel="stylesheet" href="auth.css">
+<style>
+.guide-frame{ max-width:660px; }
+.hero-mini{ text-align:center; padding:18px 14px; background:linear-gradient(145deg, rgba(192,132,252,.12), var(--panel)); border:1px solid var(--border); border-radius:16px; margin-bottom:14px; position:relative; z-index:1; }
+.hero-mini h2{ font-size:16px; color:#fff; margin:0; }
+.hero-mini p{ font-size:11px; color:#8a8aa3; margin:6px 0 0; line-height:1.6; }
+.hero-badges{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
+.hero-badges span{ font-size:9px; font-weight:800; letter-spacing:.6px; padding:5px 9px; border-radius:999px; border:1px solid var(--border); background:rgba(255,255,255,.04); color:#cfc8e8; }
+.steps{ display:flex; flex-direction:column; gap:12px; position:relative; z-index:1; }
+.card{ background:linear-gradient(180deg, var(--panel2), var(--panel)); border:1px solid var(--border); border-radius:16px; padding:16px 14px; }
+.card h3{ font-size:13px; color:#fff; margin:0 0 6px; display:flex; align-items:center; gap:6px; }
+.card p{ font-size:11px; color:#cfc8e8; line-height:1.65; margin:0; }
+.card ul{ margin:6px 0 0 16px; padding:0; }
+.card li{ font-size:11px; color:#cfc8e8; line-height:1.6; margin-bottom:3px; }
+.num{ width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#0b0818; background:linear-gradient(135deg, var(--a1), var(--a2)); flex-shrink:0; }
+.tip{ background:rgba(192,132,252,.08); border:1px dashed var(--border); border-radius:10px; padding:10px; font-size:11px; color:#cfc8e8; margin-top:8px; line-height:1.6; }
+.warn{ background:rgba(255,23,68,.08); border:1px solid rgba(255,23,68,.25); border-radius:10px; padding:10px; font-size:11px; color:#ffb3c8; margin-top:8px; line-height:1.6; }
+.ok{ background:rgba(67,233,123,.08); border:1px solid rgba(67,233,123,.25); border-radius:10px; padding:10px; font-size:11px; color:#a7f3d0; margin-top:8px; line-height:1.6; }
+.mini-table{ width:100%; border-collapse:collapse; margin-top:8px; font-size:11px; }
+.mini-table th,.mini-table td{ text-align:left; padding:7px 8px; border:1px solid var(--border); }
+.mini-table th{ color:#fff; background:color-mix(in srgb, var(--a1) 14%, transparent); font-size:10px; letter-spacing:.5px; }
+.mini-table td{ color:#cfc8e8; }
+.actions{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:14px; position:relative; z-index:1; }
+.btn{ padding:11px 18px; border-radius:12px; border:none; font-size:12px; font-weight:800; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+.btn-primary{ background:linear-gradient(135deg, var(--a1), var(--a2)); color:#0b0818; box-shadow:0 6px 18px color-mix(in srgb, var(--a1) 25%, transparent); }
+.btn-ghost{ background:transparent; border:1px solid var(--border); color:#cfc8e8; }
+</style>
+</head>
+<body data-theme="amethyst">
+<div id="mFrame">
+<div class="bg-orb orb1"></div>
+<div class="bg-orb orb2"></div>
+<div class="auth-frame guide-frame">
+  <div class="auth-head">
+    <div class="auth-logo">M U S K U</div>
+    <div class="auth-sub">HOW TO USE — COMPLETE GUIDE</div>
+  </div>
+
+  <div class="hero-mini">
+    <h2>3 Steps me MUSKU Start karo 🚀</h2>
+    <p>Google se login → <b style="color:#fff;">FREE-S2</b> se 7 Din Free → API Key lagao → Baat shuru. Bas itna hi.</p>
+    <div class="hero-badges"><span>🎙️ Live Voice</span><span>💬 Chat</span><span>📜 History</span><span>🎨 17 Borders + 12 Themes</span><span>⚡ Hinglish/Hindi/English</span></div>
+  </div>
+
+  <div class="steps">
+    <!-- 1 -->
+    <div class="card">
+      <h3><span class="num">1</span> Sign In — Google se shuru karo</h3>
+      <p><b style="color:#fff;">Continue with Google</b> dabao aur apna Google choose karo. Jaldi try karna hai to <b style="color:#fff;">Skip for now — Guest</b> bhi hai.</p>
+      <div class="tip">💡 <b>Ek Google = Ek Account.</b> Logout karoge to wapas Sign in karna hoga. Guest me bhi FREE-S2 kaam karta hai.</div>
+    </div>
+
+    <!-- 2 -->
+    <div class="card">
+      <h3><span class="num">2</span> Plan Choose — FREE-S2 vs Pro</h3>
+      <p>Activate page pe Code box me <b style="color:#fff;">FREE-S2</b> likha hoga.</p>
+      <table class="mini-table">
+        <tr><th>Code</th><th>Kya Milega</th><th>Price</th></tr>
+        <tr><td><b style="color:#43e97b;">FREE-S2</b> (exact)</td><td>7 Din Unlimited — Voice + Chat + History</td><td>₹0 <span style="opacity:.6; text-decoration:line-through;">₹199</span> <b style="color:#fde68a;">100% OFF</b></td></tr>
+        <tr><td>Ek bhi letter badla<br><span style="font-size:10px; opacity:.7;">FREE-S2A, FREE-S3, MUSKU-1...</span></td><td>Auto <b>1 Month Basic (₹99)</b> me convert</td><td>₹99 / month</td></tr>
+        <tr><td><b>Pay Now</b> button</td><td>Abhi <b>Work in Progress</b> — popup ayega, payment jald ayega</td><td>—</td></tr>
+      </table>
+      <div class="warn">⚠️ <b>Important:</b> <b style="color:#fff;">Sirf Active Free (FREE-S2) se hi MUSKU load hogi.</b> Pro / Change wala code abhi WIP hai — activate hoga par MUSKU nahi khulegi, wapas Plans pe bhej degi. Sign out karte time agar code change kiya hua hai to auto 1 Month Pro me convert ho jayega.</div>
+      <div class="tip">🎮 <b>One ID = 1 Free Only</b> — FREE-S2 ek device/local storage pe ek baar hi Free. Dobara use karoge to block: <i>"FREE-S2 Already Used"</i>. Clear Data karoge to ye record bhi delete ho jayega.</div>
+    </div>
+
+    <!-- 3 -->
+    <div class="card">
+      <h3><span class="num">3</span> API Key Lagao — Gemini Key</h3>
+      <p>MUSKU open hote hi upar <b style="color:#fff;">ENTER API KEY</b> dikhega → tap karo → Profile khulega → <b>API Key</b> me <b>AIza...</b> paste karo → Save.</p>
+      <p style="margin-top:6px;">Key yahan banao: <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--a2);">aistudio.google.com/app/apikey</a> → Create API key → Copy → MUSKU me paste.</p>
+      <div class="warn">🔒 Key kisi ko share mat karo. Leak hui to bill aapka ayega. MUSKU key ko local me encrypt karke rakhti hai.</div>
+      <div class="tip">⏰ Free 7 din khatam hote hi auto Plans pe bhej degi — naya code se renew karo.</div>
+    </div>
+
+    <!-- Daily Use -->
+    <div class="card">
+      <h3>💬 Daily Use — Kaise Baat Karein</h3>
+      <ul>
+        <li><b style="color:#fff;">Voice (Live):</b> Center me <b>START</b> → Mic Allow → bolo — Hinglish / Hindi / English. Beech me rokna ho to <b>"Ruko"</b> bolo.</li>
+        <li><b style="color:#fff;">Chat:</b> Bottom bar → <b>CHAT</b> → type karo, Enter dabao. Voice aur chat dono ka history save hota hai.</li>
+        <li><b style="color:#fff;">History:</b> Bottom bar → <b>HISTORY</b> → calendar se din choose karo, purani baatein dekho.</li>
+        <li><b style="color:#fff;">Theme & Border:</b> Top-right <b>Profile icon (M)</b> → Theme (12) / Border Design (17) → pasand ka lagao.</li>
+        <li><b style="color:#fff;">Language:</b> Profile → Language → Hinglish / Hindi / English. "Hindi me bolo" bolke bhi switch hota hai.</li>
+        <li><b style="color:#fff;">YouTube / Apps:</b> "YouTube kholo", "Gaana chalao", "Notepad kholo" — bolo, MUSKU kar degi.</li>
+      </ul>
+      <div class="ok">✅ Tip: Pehli baar mic block ho to browser ke address bar me 🔒 → Site settings → Microphone → Allow karo, page reload karo.</div>
+    </div>
+
+    <!-- MUSKU Special -->
+    <div class="card" style="border-color:color-mix(in srgb, var(--a1) 30%, var(--border));">
+      <h3>💜 MUSKU Special — Tumhari Bestie</h3>
+      <ul>
+        <li>MUSKU tumhari <b>bestie-type friend</b> hai — bilkul ek apni khaas dost ki tarah, hamesha tumhara care aur help karegi.</li>
+        <li>Naam hamesha <b>MUSKU</b> hi rahega — change nahi hota.</li>
+        <li>Care wali baatein, yaad-daasht aur daily help — jaise ek real dost.</li>
+        <li>Pet words (jaan / babu) sirf tab use karegi jab tum bologe <b>"jaan bulao"</b>.</li>
+      </ul>
+    </div>
+
+    <!-- Mobile APK (Future) -->
+    <div class="card" style="border-color:color-mix(in srgb, var(--a2) 34%, var(--border));">
+      <h3>📱 MUSKU Mobile (APK) — Jaldi Aa Raha Hai</h3>
+      <p>MUSKU jald hi <b style="color:#fff;">Android APK</b> ke roop me aayegi — phone me bina browser ke direct chalegi, aur yahan jaise hi baat karegi (Voice + Chat + History).</p>
+      <ul>
+        <li><b style="color:#fff;">Device Control:</b> "Settings kholo", "Brightness badhao", "WiFi on karo", "Alarm lagao", "Torch jalao" — phone ke settings & hardware voice se control.</li>
+        <li><b style="color:#fff;">Apps Control:</b> "YouTube kholo", "WhatsApp message bhejo", "Call karo", "Notepad likho", "Gaana chalao" — installed apps direct chalein.</li>
+        <li><b style="color:#fff;">Cross-Device Sync:</b> Desktop (Windows) aur Mobile dono me ek hi Google account + chat history auto sync rahegi.</li>
+        <li><b style="color:#fff;">Future Scope:</b> Smart home / IoT device control, file manager, reminders & automation — "MUSKU sab kar degi".</li>
+      </ul>
+      <div class="tip">🚀 <b>Abhi:</b> Windows desktop app me enjoy karo. Mobile APK launch hote hi yahan notify karenge — tab tak FREE-S2 se shuru karo.</div>
+    </div>
+
+    <!-- Dhyaan do -->
+    <div class="card" style="border-color:rgba(255,23,68,.28);">
+      <h3>⚠️ Dhyaan Do — Data & Privacy</h3>
+      <ul>
+        <li>Browser ka <b>Clear Data / Clear Cache</b> karoge to MUSKU ke chats, plan, FREE-S2 record sab delete ho jayega.</li>
+        <li>Ek hi <b>FREE-S2</b> dobara use nahi — block ho jayega. Naya ID chahiye to Code change karo (Pro me convert).</li>
+        <li>Mic ko Windows Settings → Privacy → Microphone me block mat karo.</li>
+        <li>Plan sirf isi browser me save hota hai (localStorage) — dusre browser/phone me alag se activate karna hoga.</li>
+      </ul>
+    </div>
+
+    <!-- Quick Fix -->
+    <div class="card">
+      <h3>🛠️ Problem? Quick Fix</h3>
+      <ul>
+        <li><b>MUSKU nahi khul rahi, Plans pe bhej rahi?</b> → Check karo Plan <b style="color:#43e97b;">Active Free</b> hai ya nahi. Pro / Expired hai to Plans pe hi rahegi (Only Free loads).</li>
+        <li><b>Mic nahi chal raha?</b> → Mic Allow karo + Windows mic on rakho + page reload.</li>
+        <li><b>API Key error?</b> → Key sahi copy hui? <code>AIza...</code> se start honi chahiye. Profile me dobara paste karo.</li>
+        <li><b>Pay Now dabane se kuch nahi?</b> → Ye normal hai — <b>Work in Progress</b> popup hi ayega. Abhi sirf FREE-S2 use karo.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="actions">
+    <a href="signup.html" class="btn btn-primary">← Sign in</a>
+    <a href="activate.html" class="btn btn-ghost">Plans →</a>
+    <a href="index.html" class="btn btn-ghost">Open App</a>
+  </div>
+
+  <div class="auth-foot">© 2026 MUSKU AI • Free: FREE-S2 = 7 Din • Pro: Pay Now WIP • Sirf Active Free se MUSKU load</div>
+</div>
+</div><!-- /#mFrame -->
+<script>
+// Auto theme every 3s — all 12 themes 1-by-1
+(function(){
+  var themes=["amethyst","oceanic","obsidian","emerald","monochrome","crimson","sunset","golden","cyberpunk","aurora","holographic","chrome"];
+  var cur=document.body.getAttribute("data-theme")||"amethyst";
+  var idx=themes.indexOf(cur); if(idx<0) idx=0;
+  var t=setInterval(function(){
+    idx=(idx+1)%themes.length;
+    document.body.setAttribute("data-theme", themes[idx]);
+  },3000);
+})();
+</script>
+</body>
+</html>

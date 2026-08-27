@@ -1,0 +1,161 @@
+/* UI Theme for MUSKU – Premium Dark Midnight with Teal Accent */
+:root {
+  --bg-main: #0A0F24;
+  --bg-surface: #11162E;
+  --color-primary: #1ABC9C;
+  --color-primary-light: #3ED9A9;
+  --color-success: #2ECC71;
+  --color-error: #E74C3C;
+  --color-info: #3498DB;
+  --text-primary: #E0E6F7;
+  --text-secondary: #A3B0D4;
+}
+
+/* Pink Theme – overrides accent colors when <html data-theme="pink"> */
+[data-theme="pink"] {
+  --bg-main: #1A0A14;
+  --bg-surface: #2A0F20;
+  --color-primary: #FF4FA3;
+  --color-primary-light: #FF8AC4;
+  --color-success: #FF6FB5;
+  --color-error: #FF3B6B;
+  --color-info: #FFB3D9;
+  --text-primary: #FBE6F2;
+  --text-secondary: #D9A7C4;
+}
+
+/* Global styles */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--color-primary-light);
+}
+
+/* Header */
+header {
+  height: 64px;
+  background: var(--bg-main);
+  border-bottom: 2px solid var(--color-primary);
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+  flex-shrink: 0;
+}
+
+/* Sidebar */
+nav.sidebar {
+  width: 240px;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+nav.sidebar a {
+  padding: 0.75rem 1rem;
+  color: var(--text-secondary);
+}
+nav.sidebar a.active {
+  background: var(--color-primary);
+  color: var(--bg-main);
+}
+
+/* Main conversation area */
+main.conversation {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--bg-main);
+  padding: 1rem;
+}
+
+.bubble {
+  max-width: 75%;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0;
+  animation: fadeInSlide 0.35s forwards;
+}
+.bubble.user {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-success));
+  color: #fff;
+  align-self: flex-end;
+}
+.bubble.assistant {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-left: 4px solid var(--color-primary);
+  align-self: flex-start;
+}
+
+/* Input / Voice Bar */
+footer.voice-bar {
+  height: 64px;
+  background: var(--bg-surface);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  gap: 0.5rem;
+}
+footer.voice-bar input {
+  flex: 1;
+  background: #212740;
+  color: var(--text-primary);
+  border: none;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+}
+footer.voice-bar input::placeholder { color: var(--text-secondary); }
+footer.voice-bar button {
+  background: var(--color-primary);
+  color: var(--bg-main);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+footer.voice-bar button:hover { background: var(--color-primary-light); }
+
+[data-theme="pink"] .state-listening .mic-icon {
+  animation: pulse-pink 1.5s infinite;
+}
+@keyframes pulse-pink {
+  0% { box-shadow: 0 0 0 0 rgba(255,79,163,0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(255,79,163,0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,79,163,0); }
+}
+
+/* Voice state indicators (CSS only) */
+.state-idle .mic-icon { opacity: 0.5; }
+.state-listening .mic-icon { animation: pulse 1.5s infinite; }
+.state-thinking .thinking-spinner { display: block; }
+.state-speaking .waveform { animation: waveform 1s infinite; }
+.state-error .error-badge { display: block; }
+
+/* Animations */
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(26,188,156,0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(26,188,156,0); }
+  100% { box-shadow: 0 0 0 0 rgba(26,188,156,0); }
+}
+@keyframes fadeInSlide { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes waveform { 0% { transform: scaleY(1); } 50% { transform: scaleY(0.4); } 100% { transform: scaleY(1); } }
+
+/* Toasts */
+.toast { position: fixed; top: 1rem; right: 1rem; padding: 0.75rem 1rem; border-radius: 0.5rem; color: #fff; }
+.toast.success { background: var(--color-success); }
+.toast.error { background: var(--color-error); }

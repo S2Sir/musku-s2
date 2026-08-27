@@ -1,0 +1,13 @@
+# Koyeb Deployment Configuration for MUSKU 2.0 Web Backend
+type: service
+name: musku-web-backend
+build:
+  type: docker
+  dockerfile: Dockerfile
+ports:
+  - port: 8000
+    path: /
+    protocol: http
+routes:
+  - path: /
+    port: 8000

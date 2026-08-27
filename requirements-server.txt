@@ -1,0 +1,8 @@
+# MUSKU 2.0 Web Server Runtime (Cloud Run & Server Deployment)
+# Excludes all desktop/GUI/OS packages (pyautogui, pywin32, psutil, pyaudio, etc.)
+
+google-genai>=2.17.0
+websockets>=12.0
+cryptography>=42.0
+firebase-admin>=6.4.0
+google-cloud-firestore>=2.15.0

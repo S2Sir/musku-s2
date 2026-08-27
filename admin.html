@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0818">
+<title>MUSKU — Admin Control Center</title>
+<link rel="stylesheet" href="auth.css">
+<style>
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html{ -webkit-text-size-adjust:100%; }
+:root{
+  --bg:#07060f;
+  --panel:#110e22;
+  --panel-2:#15122b;
+  --border:#241f3d;
+  --border-2:#2f2952;
+  --text:#d8d3f0;
+  --muted:#8b86aa;
+  --muted-2:#6b6788;
+  --accent:#a855f7;
+  --accent-2:#ec4899;
+  --live:#34d399;
+  --danger:#f43f5e;
+  --radius:16px;
+  --shadow:0 12px 34px rgba(0,0,0,.5);
+  --font:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+}
+body{
+  margin:0; font-family:var(--font); color:var(--text);
+  background:
+    radial-gradient(1200px 700px at 82% -10%, rgba(168,85,247,.10), transparent 60%),
+    radial-gradient(900px 600px at -10% 110%, rgba(236,72,153,.08), transparent 55%),
+    var(--bg);
+  min-height:100vh; min-height:100dvh; overflow-x:hidden;
+}
+
+/* ---------- layout ---------- */
+.admin-shell{ display:grid; grid-template-columns:264px 1fr; min-height:100vh; min-height:100dvh; }
+.side{
+  background:linear-gradient(180deg, #0c0a1a, #08060f);
+  border-right:1px solid var(--border);
+  padding:20px 16px; position:sticky; top:0; height:100vh; height:100dvh;
+  overflow:auto; z-index:30; display:flex; flex-direction:column;
+}
+.side-overlay{ display:none; position:fixed; inset:0; background:rgba(4,3,10,.55); z-index:25; }
+.side-overlay.show{ display:block; }
+
+.hamburger{ display:none; width:40px; height:40px; border-radius:10px; border:1px solid var(--border-2); background:rgba(255,255,255,.04); color:#fff; font-size:18px; cursor:pointer; align-items:center; justify-content:center; }
+.side-logo{ font-size:18px; font-weight:800; letter-spacing:5px; color:#fff; background:linear-gradient(90deg,#c084fc,#f48fb1); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+.side-sub{ font-size:10px; color:var(--muted); letter-spacing:2px; margin-top:5px; text-transform:uppercase; }
+.side-nav{ margin-top:22px; display:flex; flex-direction:column; gap:6px; }
+.side-nav button{ text-align:left; padding:11px 13px; border-radius:11px; border:1px solid transparent; background:transparent; color:var(--muted); font-size:12.5px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:9px; transition:all .15s ease; }
+.side-nav button:hover{ background:rgba(168,85,247,.10); color:#fff; border-color:rgba(168,85,247,.22); }
+.side-nav button.active{ background:linear-gradient(135deg, rgba(168,85,247,.18), rgba(236,72,153,.14)); color:#fff; border-color:rgba(168,85,247,.32); box-shadow:0 0 0 1px rgba(168,85,247,.10), 0 6px 18px rgba(168,85,247,.16); }
+.side-foot{ margin-top:auto; padding-top:14px; border-top:1px solid var(--border); font-size:10px; color:var(--muted-2); line-height:1.6; }
+
+.main{ padding:22px 24px 30px; max-width:1480px; width:100%; }
+
+/* ---------- topbar ---------- */
+.topbar{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:space-between; margin-bottom:18px; }
+.topbar h1{ font-size:20px; font-weight:800; color:#fff; letter-spacing:.4px; margin:0; }
+.topbar .live{ display:flex; align-items:center; gap:7px; font-size:11px; font-weight:800; color:var(--live); background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.3); padding:7px 12px; border-radius:999px; }
+.live-dot{ width:8px; height:8px; border-radius:50%; background:var(--live); box-shadow:0 0 8px var(--live); animation:blink 1.4s infinite; }
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ---------- stat cards ---------- */
+.stats{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:16px; }
+.stat{ position:relative; overflow:hidden; background:linear-gradient(165deg, rgba(22,18,42,.95), rgba(13,11,26,.95)); border:1px solid var(--border); border-radius:var(--radius); padding:14px 14px 12px; box-shadow:var(--shadow); }
+.stat::before{ content:""; position:absolute; left:0; top:0; height:3px; width:100%; background:linear-gradient(90deg, var(--accent), var(--accent-2)); opacity:.85; }
+.stat b{ display:block; font-size:22px; color:#fff; font-weight:800; letter-spacing:.4px; }
+.stat span{ font-size:10px; letter-spacing:1.2px; color:var(--muted); font-weight:700; text-transform:uppercase; }
+
+/* ---------- cards ---------- */
+.card{ background:linear-gradient(165deg, #12102a, #0e0c1e); border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); margin-bottom:16px; }
+.card-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+.card-title{ font-size:13.5px; font-weight:800; color:#fff; letter-spacing:.5px; }
+
+/* ---------- form controls ---------- */
+.row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.input, .select{ padding:11px 13px; border-radius:11px; border:1px solid var(--border-2); background:#0a0918; color:#fff; font-size:12.5px; outline:none; min-width:180px; flex:1; transition:border-color .15s ease, box-shadow .15s ease; font-family:var(--font); }
+.input::placeholder{ color:var(--muted-2); }
+.input:focus, .select:focus{ border-color:var(--accent); box-shadow:0 0 0 3px rgba(168,85,247,.18); }
+.select{ cursor:pointer; }
+.btn{ padding:11px 15px; border-radius:11px; border:none; font-size:12.5px; font-weight:800; cursor:pointer; color:#0b0818; background:linear-gradient(135deg, #c084fc, #f48fb1); box-shadow:0 6px 16px rgba(168,85,247,.3); touch-action:manipulation; transition:transform .12s ease, filter .12s ease, box-shadow .12s ease; font-family:var(--font); }
+.btn:hover{ filter:brightness(1.06); box-shadow:0 8px 22px rgba(168,85,247,.4); }
+.btn:active{ transform:scale(.97); }
+.btn:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
+.btn.ghost{ background:rgba(255,255,255,.05); color:var(--text); border:1px solid var(--border-2); box-shadow:none; }
+.btn.ghost:hover{ background:rgba(255,255,255,.09); border-color:var(--accent); }
+.btn.danger{ background:linear-gradient(135deg, #fb7185, #e11d48); color:#fff; }
+.btn.danger:hover{ filter:brightness(1.06); }
+.btn.small{ padding:7px 10px; font-size:11.5px; }
+
+/* ---------- table ---------- */
+.table-wrap{ overflow:auto; border-radius:12px; border:1px solid var(--border); max-height:560px; -webkit-overflow-scrolling:touch; background:rgba(8,7,18,.5); }
+table{ width:100%; border-collapse:collapse; font-size:11.5px; min-width:840px; }
+th{ position:sticky; top:0; background:#0d0b1e; text-align:left; font-size:10px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); padding:11px 10px; border-bottom:1px solid var(--border-2); z-index:2; }
+td{ padding:10px; border-bottom:1px solid rgba(255,255,255,.05); color:var(--text); vertical-align:top; }
+tr:hover td{ background:rgba(168,85,247,.06); }
+tbody tr:nth-child(even) td{ background:rgba(255,255,255,.015); }
+
+/* ---------- badges / chips ---------- */
+.badge{ display:inline-flex; padding:3px 8px; border-radius:999px; font-size:9px; font-weight:800; border:1px solid transparent; letter-spacing:.5px; }
+.badge-free{ background:rgba(52,211,153,.14); color:var(--live); border-color:rgba(52,211,153,.3); }
+.badge-pro{ background:linear-gradient(135deg, #c084fc, #f48fb1); color:#0b0818; }
+.mono{ font-family:ui-monospace,Consolas,monospace; font-size:11px; color:#fff; word-break:break-all; }
+.small{ font-size:10.5px; color:var(--muted); line-height:1.5; }
+.chip{ display:inline-flex; align-items:center; gap:5px; padding:5px 9px; border-radius:999px; font-size:10.5px; font-weight:700; background:rgba(255,255,255,.05); border:1px solid var(--border-2); color:var(--text); }
+
+/* ---------- detail boxes ---------- */
+.detail{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.detail-box{ background:rgba(0,0,0,.25); border:1px solid var(--border); border-radius:12px; padding:12px; }
+.detail-box b{ font-size:11.5px; color:#fff; display:block; margin-bottom:6px; }
+.kv{ display:flex; justify-content:space-between; gap:10px; font-size:11px; padding:5px 0; border-bottom:1px dashed rgba(255,255,255,.07); }
+.kv:last-child{ border:none; }
+.kv span:first-child{ color:var(--muted); }
+.kv span:last-child{ color:#fff; font-weight:600; text-align:right; }
+.maplink{ color:#22d3ee; text-decoration:underline; cursor:pointer; }
+
+/* ---------- toast ---------- */
+.auth-toast{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); background:linear-gradient(135deg,#1a1530,#120e26); border:1px solid var(--border-2); color:#fff; padding:11px 16px; border-radius:12px; font-size:12px; font-weight:700; box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease; z-index:999; max-width:90vw; }
+.auth-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ---------- responsive ---------- */
+@media(max-width:1100px){ .stats{ grid-template-columns:repeat(3,1fr);} }
+@media(max-width:900px){
+  .admin-shell{ grid-template-columns:1fr; }
+  .side{ position:fixed; left:-280px; top:0; width:264px; height:100vh; height:100dvh; transition:left 240ms ease; box-shadow:10px 0 30px rgba(0,0,0,.6); }
+  .side.open{ left:0; }
+  .hamburger{ display:flex; }
+  .main{ padding:16px 14px 24px; }
+}
+@media(max-width:640px){
+  .stats{ grid-template-columns:repeat(2,1fr); gap:10px; }
+  .card{ padding:13px; border-radius:14px; }
+  .row{ flex-direction:column; align-items:stretch; }
+  .row .input, .row .select, .row .btn{ width:100%; min-width:0; }
+  .table-wrap{ max-height:62vh; }
+  table{ min-width:720px; }
+  .detail{ grid-template-columns:1fr; }
+  .topbar h1{ font-size:17px; }
+}
+
+</style>
+</head>
+<body data-theme="amethyst">
+<div class="side-overlay" id="sideOverlay"></div>
+<div class="admin-shell">
+  <aside class="side" id="sideNav">
+    <div class="side-logo">M U S K U</div>
+    <div class="side-sub">ADMIN CONTROL CENTER</div>
+    <div id="adminBadge" class="small" style="margin-top:8px; color:#43e97b;"></div>
+    <nav class="side-nav">
+      <button class="active" data-tab="users">👥 Users & Plans</button>
+      <button data-tab="traces">📍 Traces & Devices</button>
+      <button data-tab="keys">🔑 Keys</button>
+      <button id="exportBtn">⬇ Export CSV</button>
+      <button id="signOutBtnSide">↪ Sign out</button>
+    </nav>
+    <div class="side-foot">100% Firebase Realtime • Live sync • Admin only<br><span id="connStatus" class="small">● connecting…</span></div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button class="hamburger" id="hamburger" type="button" aria-label="Menu">☰</button>
+        <h1>Control Center</h1>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <div class="live"><span class="live-dot"></span> LIVE Firebase</div>
+        <button id="signOutBtn" class="btn ghost small" type="button">Sign out</button>
+      </div>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat"><b id="sTotal">—</b><span>TOTAL USERS</span></div>
+      <div class="stat"><b id="sFree">—</b><span>FREE ACTIVE</span></div>
+      <div class="stat"><b id="sPro">—</b><span>PRO ACTIVE</span></div>
+      <div class="stat"><b id="sExp">—</b><span>EXPIRED</span></div>
+      <div class="stat"><b id="sToday">—</b><span>TODAY JOINS</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-title">🔍 Find & Control</div><span class="small">Gmail / UID / IP / DeviceId se search</span></div>
+      <div class="row">
+        <input id="searchEmail" class="input" placeholder="Gmail / UID / IP / deviceId — s2sir5252@gmail.com">
+        <select id="filterPlan" class="select">
+          <option value="all">All Plans</option>
+          <option value="free">Free only</option>
+          <option value="pro">Pro only</option>
+          <option value="expired">Expired</option>
+        </select>
+        <button id="searchBtn" class="btn" type="button">Search</button>
+        <button id="loadAllBtn" class="btn ghost" type="button">↻ Refresh</button>
+        <button id="clearBtn" class="btn ghost" type="button">Clear</button>
+      </div>
+      <div id="searchResult" class="small" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card" id="editCard" style="display:none;">
+      <div class="card-head"><div class="card-title">✏️ Selected User — Change Plan</div><button id="closeEdit" class="btn ghost small" type="button">✕ Close</button></div>
+      <div id="editInfo" class="small"></div>
+      <div class="detail" style="margin-top:10px;">
+        <div class="detail-box">
+          <b>Plan & Expiry</b>
+          <div class="row" style="margin-top:6px;">
+            <select id="planSelect" class="select" style="flex:1;">
+              <option value="free">Free 7D (7 days)</option>
+              <option value="1m">Pro 1 Month (30d) — ₹99</option>
+              <option value="3m">Pro 3 Months (90d) — ₹199</option>
+              <option value="1y">Pro 1 Year (365d) — ₹999</option>
+              <option value="custom">Custom days…</option>
+            </select>
+            <input id="customDays" class="input" type="number" min="1" max="1095" placeholder="Days" style="max-width:120px; display:none;">
+          </div>
+          <div id="expiryPreview" class="mono" style="margin-top:8px; padding:8px; background:#060510; border-radius:8px; border:1px solid #1e1a30;"></div>
+          <div class="row" style="margin-top:8px;">
+            <input id="previewKey" class="input mono" readonly placeholder="MUSKU-XXXX-..." style="text-transform:uppercase;">
+            <button id="regenKeyBtn" class="btn ghost small" type="button">↻ New Key</button>
+          </div>
+        </div>
+        <div class="detail-box" id="traceBox">
+          <b>📍 Trace (Live)</b>
+          <div id="traceInfo" class="small">No trace</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button id="savePlanBtn" class="btn" type="button">💾 Save to Firebase</button>
+        <button id="extend7Btn" class="btn ghost" type="button">+7 Days</button>
+        <button id="revokeBtn" class="btn danger" type="button">⛔ Revoke</button>
+        <button id="deleteBtn" class="btn danger" type="button">🗑 Delete</button>
+        <button id="copyKeyBtn" class="btn ghost" type="button">⎘ Copy Key</button>
+      </div>
+      <div id="editHint" class="small" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-title">👥 All Users — Live</div>
+        <div class="row">
+          <input id="tableSearch" class="input" placeholder="Filter table…" style="max-width:220px;">
+          <span id="userCount" class="chip">0 users</span>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Gmail / UID</th><th>Plan / Until / Key</th><th>IP / Location / Device</th><th>Last Seen</th><th>Actions</th></tr></thead>
+          <tbody id="usersBody"><tr><td colspan="5" class="small">Loading live data…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="keysCard" style="display:none;">
+      <div class="card-title">🔑 All Keys</div>
+      <div id="keysBody" class="small">—</div>
+    </div>
+
+  </main>
+</div>
+
+<div class="auth-toast" id="toast"></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="auth.js?v=4"></script>
+<script>
+(function(){
+  const ADMIN_EMAILS=["s2sir5252@gmail.com"];
+  const ADMIN_UIDS=["H4cxtamW96NJxl1doz2G9edi0O92"];
+  function isAdmin(u){ if(!u) return false; if(ADMIN_UIDS.indexOf(u.uid)!==-1) return true; if(u.email && ADMIN_EMAILS.indexOf(u.email.toLowerCase())!==-1) return true; return false; }
+  function toast(m){ var e=document.getElementById("toast"); if(!e) return; e.textContent=m; e.classList.add("show"); setTimeout(function(){e.classList.remove("show")},2600); }
+  function safeEmail(e){ return e.toLowerCase().replace(/\./g,",").replace(/\$/g,"_").replace(/\#/g,"_").replace(/\[/g,"_").replace(/\]/g,"_").replace(/\//g,"_"); }
+  function genKey(){ var c="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", o="MUSKU-"; try{ var a=new Uint32Array(16); crypto.getRandomValues(a); for(var i=0;i<16;i++){o+=c[a[i]%c.length]; if(i==3||i==7||i==11)o+="-";}}catch(e){ for(var j=0;j<16;j++){o+=c[Math.floor(Math.random()*c.length)]; if(j==3||j==7||j==11)o+="-";}} return o; }
+  function daysForPlan(v, custom){ if(v=="free") return 7; if(v=="1m") return 30; if(v=="3m") return 90; if(v=="1y") return 365; if(v=="custom") return parseInt(custom)||30; return 7; }
+  function fmtLocal(iso){ try{ return new Date(iso).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});}catch(e){return iso;} }
+  function isExpired(u){ if(!u.until) return false; try{ return new Date(u.until).getTime() < Date.now(); }catch(e){return false;} }
+
+  var selectedUser=null, currentKey="", currentUntil="";
+  var searchEmail=document.getElementById("searchEmail"), filterPlan=document.getElementById("filterPlan"), searchBtn=document.getElementById("searchBtn"), loadAllBtn=document.getElementById("loadAllBtn"), clearBtn=document.getElementById("clearBtn"), tableSearch=document.getElementById("tableSearch");
+  var searchResult=document.getElementById("searchResult"), editCard=document.getElementById("editCard"), editInfo=document.getElementById("editInfo"), planSelect=document.getElementById("planSelect"), customDays=document.getElementById("customDays"), expiryPreview=document.getElementById("expiryPreview"), previewKey=document.getElementById("previewKey"), regenKeyBtn=document.getElementById("regenKeyBtn"), savePlanBtn=document.getElementById("savePlanBtn"), editHint=document.getElementById("editHint"), usersBody=document.getElementById("usersBody"), userCount=document.getElementById("userCount"), adminBadge=document.getElementById("adminBadge"), connStatus=document.getElementById("connStatus");
+  var sTotal=document.getElementById("sTotal"), sFree=document.getElementById("sFree"), sPro=document.getElementById("sPro"), sExp=document.getElementById("sExp"), sToday=document.getElementById("sToday");
+  var extend7Btn=document.getElementById("extend7Btn"), revokeBtn=document.getElementById("revokeBtn"), deleteBtn=document.getElementById("deleteBtn"), copyKeyBtn=document.getElementById("copyKeyBtn"), closeEdit=document.getElementById("closeEdit"), traceInfo=document.getElementById("traceInfo");
+  var allUsersMap={};
+
+  function updatePreview(){
+    var v=planSelect.value;
+    customDays.style.display= v=="custom" ? "" : "none";
+    var days=daysForPlan(v, customDays.value);
+    currentUntil=new Date(Date.now()+days*86400000).toISOString();
+    expiryPreview.textContent= days+" days → "+fmtLocal(currentUntil) + " ("+currentUntil+")";
+    if(!currentKey) currentKey=genKey();
+    previewKey.value=currentKey;
+  }
+  planSelect.addEventListener("change", updatePreview);
+  customDays.addEventListener("input", updatePreview);
+  regenKeyBtn.addEventListener("click", function(){ currentKey=genKey(); previewKey.value=currentKey; });
+  closeEdit.addEventListener("click", function(){ editCard.style.display="none"; selectedUser=null; });
+  copyKeyBtn.addEventListener("click", function(){ if(previewKey.value) navigator.clipboard.writeText(previewKey.value).then(function(){toast("Key copied")}); });
+
+  function renderUsers(){
+    var q=(tableSearch.value||"").toLowerCase();
+    var fp=filterPlan.value;
+    var rows="", n=0, free=0, pro=0, exp=0, today=0;
+    var todayStr=new Date().toISOString().slice(0,10);
+    for(var k in allUsersMap){
+      var u=allUsersMap[k];
+      var email=(u.email||k.replace(/,/g,".")).toLowerCase();
+      var uid=(u.uid||"");
+      var ip=(u.ip||"");
+      var dev=(u.deviceId||"");
+      var hay=(email+" "+uid+" "+ip+" "+dev).toLowerCase();
+      if(q && hay.indexOf(q)==-1) continue;
+      var plan=(u.planType||u.type||"free");
+      if(fp=="free" && plan!="free") continue;
+      if(fp=="pro" && plan=="free") continue;
+      var expired=isExpired(u);
+      if(fp=="expired" && !expired) continue;
+      // stats
+      n++; if(plan=="free" && !expired) free++; if(plan!="free" && !expired) pro++; if(expired) exp++; if(u.lastSeen && u.lastSeen.slice(0,10)==todayStr) today++;
+      var badge= plan=="free" ? '<span class="badge badge-free">FREE 7D</span>' : '<span class="badge badge-pro">PRO '+ (u.tenure||"") +'</span>';
+      if(expired) badge+=' <span class="badge" style="background:#ff1744;color:#fff;">EXPIRED</span>';
+      var untilFmt=u.until ? fmtLocal(u.until) : "—";
+      var key=u.key||u.activationKey||"—";
+      var loc=u.location ? ('<a class="maplink" target="_blank" href="https://maps.google.com/?q='+u.location.lat+','+u.location.lng+'">'+u.location.lat.toFixed(4)+','+u.location.lng.toFixed(4)+' ('+Math.round(u.location.accuracy)+'m)</a>') : "—";
+      var last=u.lastSeen ? fmtLocal(u.lastSeen) : "—";
+      rows+='<tr><td><b class="mono">'+email+'</b><div class="small">'+uid+'</div><div class="small">'+ (u.reason||"") +'</div></td><td>'+badge+'<div class="small">'+untilFmt+'</div><div class="mono" style="font-size:10px;">'+key+'</div></td><td><div class="small">IP: '+(ip||"—")+'</div><div class="small">'+loc+'</div><div class="small">'+dev+'</div><div class="small" style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+(u.userAgent||"")+'</div></td><td class="small">'+last+'<div>'+ (u.timezone||"") +'</div></td><td><div class="row"><button class="btn ghost small" data-k="'+k+'">Edit</button><button class="btn ghost small" data-copy="'+key+'">Copy Key</button></div></td></tr>';
+    }
+    usersBody.innerHTML= rows || '<tr><td colspan="5" class="small">No users match</td></tr>';
+    userCount.textContent=n+" users";
+    sTotal.textContent=n; sFree.textContent=free; sPro.textContent=pro; sExp.textContent=exp; sToday.textContent=today;
+    // bind edit/copy
+    usersBody.querySelectorAll("button[data-k]").forEach(function(b){ b.addEventListener("click", function(){ var k=b.getAttribute("data-k"); selectedUser=allUsersMap[k]; if(!selectedUser.email) selectedUser.email=k.replace(/,/g,"."); showEdit(); }); });
+    usersBody.querySelectorAll("button[data-copy]").forEach(function(b){ b.addEventListener("click", function(){ var v=b.getAttribute("data-copy"); if(v && v!="—") navigator.clipboard.writeText(v).then(function(){toast("Copied "+v)}); }); });
+  }
+  tableSearch.addEventListener("input", renderUsers);
+  filterPlan.addEventListener("change", renderUsers);
+  clearBtn.addEventListener("click", function(){ tableSearch.value=""; filterPlan.value="all"; searchEmail.value=""; searchResult.textContent=""; renderUsers(); });
+
+  function showEdit(){
+    var email=selectedUser.email||"";
+    var uid=selectedUser.uid||"";
+    editCard.style.display="";
+    editInfo.innerHTML='<b class="mono">'+email+'</b> <span class="small">UID: '+uid+'</span><br>Current: <b>'+(selectedUser.planType||"free")+'</b> till '+(selectedUser.until?fmtLocal(selectedUser.until):"—")+' | Key: <span class="mono">'+(selectedUser.key||"—")+'</span> | Device: <span class="mono">'+(selectedUser.deviceId||"—")+'</span>';
+    // trace
+    var t=selectedUser;
+    traceInfo.innerHTML='<div class="kv"><span>IP</span><span>'+(t.ip||"—")+'</span></div><div class="kv"><span>Location</span><span>'+(t.location? t.location.lat+","+t.location.lng+" ±"+Math.round(t.location.accuracy)+"m <a class=maplink target=_blank href=https://maps.google.com/?q="+t.location.lat+","+t.location.lng+">Map</a>" : "—")+'</span></div><div class="kv"><span>DeviceId</span><span class="mono">'+(t.deviceId||"—")+'</span></div><div class="kv"><span>Platform</span><span>'+(t.platform||"—")+'</span></div><div class="kv"><span>UA</span><span style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+(t.userAgent||"—")+'</span></div><div class="kv"><span>Screen</span><span>'+(t.screen||"—")+'</span></div><div class="kv"><span>Timezone</span><span>'+(t.timezone||"—")+'</span></div><div class="kv"><span>LastSeen</span><span>'+(t.lastSeen?fmtLocal(t.lastSeen):"—")+'</span></div>';
+    currentKey=""; updatePreview();
+    editCard.scrollIntoView({behavior:"smooth"});
+  }
+
+  function doSearch(){
+    var raw=(searchEmail.value||"").trim().toLowerCase();
+    if(!raw){ toast("Gmail / UID / IP likho"); return; }
+    // search in allUsersMap
+    var found=null, fk=null;
+    for(var k in allUsersMap){
+      var u=allUsersMap[k];
+      var hay=( (u.email||"")+ " "+(u.uid||"")+ " "+(u.ip||"")+ " "+(u.deviceId||"") ).toLowerCase();
+      if(hay.indexOf(raw)!==-1){ found=u; fk=k; break; }
+    }
+    if(found){ selectedUser=found; showEdit(); searchResult.textContent="Found: "+(found.email||fk); }
+    else {
+      // try Firebase direct by email
+      var ek=safeEmail(raw);
+      firebase.database().ref("musku_users_by_email/"+ek).once("value").then(function(s){
+        var v=s.val();
+        if(v){ selectedUser=v; firebase.database().ref("musku_activations/"+v.uid).once("value").then(function(s2){ var a=s2.val(); if(a) Object.assign(selectedUser,a); showEdit(); }); }
+        else { searchResult.textContent="Not found — naya plan bana sakte ho"; selectedUser={ email:raw, uid:null }; showEdit(); }
+      });
+    }
+  }
+
+  function doSave(uid, email, ek, ptype, tenure, now, until, key){
+    var payload={ uid:uid, email:email, planType:ptype, tenure:tenure, key:key, createdAt:now, until:until, active:true };
+    var freePayload={ claimed:true, gameId:"FREE-S2", at:now, until:until, email:email, key:key, uid:uid };
+    var updates={};
+    updates["musku_activations/"+uid]=payload;
+    updates["musku_activations_by_email/"+ek]=payload;
+    updates["musku_keys/"+key]=payload;
+    updates["freeClaims/"+uid]=freePayload;
+    updates["freeClaims_by_email/"+ek]=freePayload;
+    updates["musku_users/"+uid+"/lastSeen"]=now;
+    return firebase.database().ref().update(updates);
+  }
+
+  savePlanBtn.addEventListener("click", function(){
+    if(!selectedUser){ toast("Pehle search karo"); return; }
+    var email=(selectedUser.email||searchEmail.value.trim()).toLowerCase();
+    var ek=safeEmail(email);
+    var tenure=planSelect.value;
+    var days=daysForPlan(tenure, customDays.value);
+    var ptype= tenure=="free" ? "free" : "pro";
+    var tenReal= tenure=="custom" ? ("custom_"+days+"d") : tenure;
+    var now=new Date().toISOString();
+    var until=currentUntil;
+    var key=currentKey||genKey();
+    var uid=selectedUser.uid;
+    if(!uid){
+      firebase.database().ref("musku_email_index/"+ek).once("value").then(function(s){
+        var v=s.val();
+        if(v) { selectedUser.uid=v; doSave(v, email, ek, ptype, tenReal, now, until, key).then(function(){ toast("Saved "+email); }).catch(function(e){ toast(e.message); }); }
+        else toast("UID nahi mila — user ko pehle ek bar login karwao");
+      });
+      return;
+    }
+    savePlanBtn.disabled=true; savePlanBtn.textContent="Saving…";
+    doSave(uid, email, ek, ptype, tenReal, now, until, key).then(function(){
+      toast("Saved: "+email+" → "+ptype+" "+tenReal);
+      document.getElementById("editHint").textContent="Updated musku_activations/"+uid+" + key "+key;
+      savePlanBtn.disabled=false; savePlanBtn.textContent="💾 Save to Firebase";
+    }).catch(function(e){ toast(e.message); savePlanBtn.disabled=false; savePlanBtn.textContent="💾 Save to Firebase"; });
+  });
+  extend7Btn.addEventListener("click", function(){
+    if(!selectedUser || !selectedUser.until){ toast("Pehle user select karo"); return; }
+    var cur=new Date(selectedUser.until).getTime();
+    if(isNaN(cur)) cur=Date.now();
+    var nxt=new Date(cur+7*86400000).toISOString();
+    currentUntil=nxt; expiryPreview.textContent="Extended +7d → "+fmtLocal(nxt);
+    toast("Expiry extended preview — Save dabao");
+  });
+  revokeBtn.addEventListener("click", function(){
+    if(!selectedUser || !selectedUser.uid){ toast("No user"); return; }
+    if(!confirm("Revoke plan for "+(selectedUser.email||selectedUser.uid)+"?")) return;
+    var uid=selectedUser.uid, ek=safeEmail(selectedUser.email||"");
+    var del={};
+    del["musku_activations/"+uid]=null;
+    del["musku_activations_by_email/"+ek]=null;
+    del["freeClaims/"+uid]=null;
+    del["freeClaims_by_email/"+ek]=null;
+    if(selectedUser.key) del["musku_keys/"+selectedUser.key]=null;
+    firebase.database().ref().update(del).then(function(){ toast("Revoked"); editCard.style.display="none"; });
+  });
+  deleteBtn.addEventListener("click", function(){
+    if(!selectedUser || !selectedUser.uid){ toast("No user"); return; }
+    if(!confirm("DELETE ALL DATA for "+(selectedUser.email||selectedUser.uid)+"? This cannot be undone.")) return;
+    var uid=selectedUser.uid, ek=safeEmail(selectedUser.email||"");
+    var del={};
+    del["musku_activations/"+uid]=null; del["musku_activations_by_email/"+ek]=null; del["freeClaims/"+uid]=null; del["freeClaims_by_email/"+ek]=null; del["musku_users/"+uid]=null; del["musku_users_by_email/"+ek]=null; del["musku_traces/"+uid]=null; del["musku_email_index/"+ek]=null;
+    if(selectedUser.key) del["musku_keys/"+selectedUser.key]=null;
+    firebase.database().ref().update(del).then(function(){ toast("Deleted"); editCard.style.display="none"; });
+  });
+
+  // Live listeners — 100% real Firebase connection
+  function startLive(){
+    connStatus.textContent="● live sync on";
+    connStatus.style.color="#43e97b";
+    // listen to users_by_email + activations_by_email
+    firebase.database().ref("musku_users_by_email").on("value", function(s){
+      var byEmail=s.val()||{};
+      // merge with activations
+      firebase.database().ref("musku_activations_by_email").once("value").then(function(s2){
+        var act=s2.val()||{};
+        for(var k in act){ if(!byEmail[k]) byEmail[k]=act[k]; else Object.assign(byEmail[k], act[k]); }
+        // also include UID-only users
+        firebase.database().ref("musku_users").once("value").then(function(s3){
+          var byUid=s3.val()||{};
+          for(var uid in byUid){
+            var u=byUid[uid];
+            if(u.email){
+              var ek=safeEmail(u.email);
+              if(!byEmail[ek]) byEmail[ek]=u;
+              // merge trace location/ip if missing
+              if(!byEmail[ek].ip && u.ip) byEmail[ek].ip=u.ip;
+              if(!byEmail[ek].location && u.location) byEmail[ek].location=u.location;
+            }
+          }
+          allUsersMap=byEmail;
+          renderUsers();
+        });
+      });
+    }, function(e){ connStatus.textContent="● error: "+e.message; connStatus.style.color="#ff6b6b"; });
+    // also watch traces for live device updates
+    firebase.database().ref("musku_traces").on("value", function(s){
+      var traces=s.val()||{};
+      for(var uid in traces){
+        var t=traces[uid];
+        if(t.email){
+          var ek=safeEmail(t.email);
+          if(allUsersMap[ek]){
+            allUsersMap[ek].ip=t.ip||allUsersMap[ek].ip;
+            allUsersMap[ek].location=t.location||allUsersMap[ek].location;
+            allUsersMap[ek].deviceId=t.deviceId||allUsersMap[ek].deviceId;
+            allUsersMap[ek].userAgent=t.userAgent||allUsersMap[ek].userAgent;
+            allUsersMap[ek].lastSeen=t.timestamp||allUsersMap[ek].lastSeen;
+          }
+        }
+      }
+      renderUsers();
+    });
+  }
+
+  // Export
+  document.getElementById("exportBtn").addEventListener("click", function(){
+    var rows=[["email","uid","plan","tenure","key","until","ip","lat","lng","deviceId","lastSeen"]];
+    for(var k in allUsersMap){
+      var u=allUsersMap[k];
+      rows.push([u.email||"", u.uid||"", u.planType||"", u.tenure||"", u.key||"", u.until||"", u.ip||"", u.location?u.location.lat:"", u.location?u.location.lng:"", u.deviceId||"", u.lastSeen||""]);
+    }
+    var csv=rows.map(function(r){ return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(","); }).join("\n");
+    var blob=new Blob([csv],{type:"text/csv"});
+    var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="musku_users_"+new Date().toISOString().slice(0,10)+".csv"; a.click();
+  });
+
+  searchBtn.addEventListener("click", doSearch);
+  loadAllBtn.addEventListener("click", function(){ renderUsers(); toast("Refreshed"); });
+  searchEmail.addEventListener("keydown", function(e){ if(e.key=="Enter") doSearch(); });
+  document.getElementById("signOutBtn").addEventListener("click", function(){ firebase.auth().signOut().then(function(){ location.replace("signup.html"); }); });
+  document.getElementById("signOutBtnSide").addEventListener("click", function(){ firebase.auth().signOut().then(function(){ location.replace("signup.html"); }); });
+
+  // Mobile hamburger
+  (function(){
+    var ham=document.getElementById("hamburger"), side=document.getElementById("sideNav"), overlay=document.getElementById("sideOverlay");
+    if(ham && side && overlay){
+      ham.addEventListener("click", function(){ side.classList.toggle("open"); overlay.classList.toggle("show"); });
+      overlay.addEventListener("click", function(){ side.classList.remove("open"); overlay.classList.remove("show"); });
+      // close on nav click (mobile)
+      side.querySelectorAll("button").forEach(function(b){ b.addEventListener("click", function(){ if(window.innerWidth<=900){ side.classList.remove("open"); overlay.classList.remove("show"); } }); });
+    }
+  })();
+  // Gate
+  firebase.auth().onAuthStateChanged(function(u){
+    if(!u){ document.getElementById("adminBadge").textContent="Not signed in"; setTimeout(function(){ location.replace("signup.html"); },800); return; }
+    var email=(u.email||"").toLowerCase();
+    if(ADMIN_EMAILS.indexOf(email)==-1 && ADMIN_UIDS.indexOf(u.uid)==-1){
+      document.getElementById("adminBadge").textContent="Access denied: "+email;
+      document.getElementById("adminBadge").style.color="#ff6b6b";
+      setTimeout(function(){ location.replace("activate.html"); },1200);
+      return;
+    }
+    document.getElementById("adminBadge").textContent="Admin: "+email+" ✓ • LIVE";
+    document.getElementById("adminBadge").style.color="#43e97b";
+    updatePreview();
+    startLive();
+    try{ if(typeof collectAndStoreTrace==="function") collectAndStoreTrace("admin_open"); }catch(e){}
+  });
+  updatePreview();
+})();
+</script>
+</body>
+</html>

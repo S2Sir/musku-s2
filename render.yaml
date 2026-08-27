@@ -1,0 +1,14 @@
+# Render Deployment Blueprint for MUSKU 2.0 Web Backend
+services:
+  - type: web
+    name: musku-web-backend
+    env: python
+    buildCommand: pip install -r requirements-server.txt
+    startCommand: python app.py
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        value: musku-ai

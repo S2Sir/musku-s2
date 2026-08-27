@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0818">
+<title>MUSKU — Activate Plan</title>
+<link rel="stylesheet" href="auth.css">
+<style>
+.key-divider{ display:flex; align-items:center; gap:10px; margin:14px 0 10px; color:#6b6b80; font-size:10px; font-weight:800; letter-spacing:1.2px; }
+.key-divider::before,.key-divider::after{ content:""; flex:1; height:1px; background:linear-gradient(90deg, transparent, var(--border), transparent); }
+.key-box{ background:rgba(0,0,0,.22); border:1px solid var(--border); border-radius:14px; padding:12px; margin-bottom:6px; }
+.key-label{ font-size:11px; font-weight:800; letter-spacing:.6px; color:#fff; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+.key-row{ display:flex; gap:8px; }
+.key-row .game-id{ margin-bottom:0; flex:1; text-transform:uppercase; letter-spacing:1px; font-weight:700; }
+.key-activate{ min-width:96px; padding:10px 12px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer; color:#0b0818; background:linear-gradient(135deg, var(--a1), var(--a2)); box-shadow:0 4px 16px color-mix(in srgb, var(--a1) 22%, transparent); transition:transform 80ms ease, filter 80ms ease; touch-action:manipulation; }
+.key-activate:hover{ filter:brightness(1.07); transform:translateY(-1px); }
+.key-activate:active{ transform:scale(.96); transition-duration:60ms; }
+.key-activate:disabled{ opacity:.6; cursor:wait; }
+.key-hint{ font-size:10px; color:#8a8aa3; margin-top:7px; line-height:1.4; min-height:12px; }
+.key-hint.ok{ color:#43e97b; font-weight:700; }
+.key-hint.err{ color:#ff6b6b; font-weight:700; }
+.key-display{ display:flex; align-items:center; gap:8px; margin-top:10px; padding:8px 10px; border-radius:10px; background:rgba(67,233,123,.1); border:1px solid rgba(67,233,123,.28); font-size:11px; color:#cfc8e8; }
+.key-display b{ color:#fff; letter-spacing:.8px; text-transform:uppercase; flex:1; }
+.key-copy{ padding:6px 10px; border-radius:8px; border:1px solid rgba(192,132,252,.3); background:rgba(192,132,252,.14); color:#fff; font-size:10px; font-weight:800; cursor:pointer; }
+</style>
+</head>
+<body data-theme="amethyst">
+<div id="mFrame">
+<div class="bg-orb orb1"></div>
+<div class="bg-orb orb2"></div>
+<div class="auth-frame">
+  <div class="plans-head">
+    <div class="auth-logo" style="font-size:24px;">M U S K U</div>
+    <div class="plans-title">Choose your plan</div>
+    <div class="plans-sub">One plan • Pick tenure • Instant activation</div>
+    <div class="auth-badge" id="userBadge" style="display:none;"></div>
+  </div>
+
+  <!-- FUNDED FIRM STYLE — SINGLE CARD SELECTOR -->
+  <div class="funded-card shimmer" id="fundedCard">
+    <span class="funded-badge" id="fundedBadge">FREE • 7 DAYS</span>
+    <div class="funded-name" id="fundedName">Free Trial</div>
+    <div class="funded-desc" id="fundedDesc" style="display:none;"></div>
+
+    <!-- Selector — 4 pills like funded account sizes -->
+    <div class="funded-selector" role="tablist" aria-label="Plan tenure">
+      <button class="funded-opt active" data-plan="free" type="button">
+        <strong>Free 7D</strong>
+        <span class="fo-price">₹0</span>
+        <small>100% OFF</small>
+      </button>
+      <button class="funded-opt" data-plan="1m" type="button">
+        <strong>1 Month</strong>
+        <span class="fo-price">₹99</span>
+        <small>50% OFF</small>
+      </button>
+      <button class="funded-opt" data-plan="3m" type="button">
+        <strong>3 Months</strong>
+        <span class="fo-price">₹199</span>
+        <small>33% OFF</small>
+      </button>
+      <button class="funded-opt" data-plan="1y" type="button">
+        <strong>1 Year</strong>
+        <span class="fo-price">₹999</span>
+        <small>BEST VALUE</small>
+      </button>
+    </div>
+
+    <!-- Dynamic Price Row -->
+    <div class="funded-price-row" id="fundedPriceRow">
+      <span class="price-now">₹0</span>
+      <span class="price-old">₹199</span>
+      <span class="price-off">100% OFF</span>
+    </div>
+
+    <!-- ID input — only for Free (auto hide for Pro) -->
+    <div id="gameIdWrap">
+      <input class="game-id" id="gameIdInput" placeholder="FREE-S2" value="FREE-S2" autocomplete="off">
+    </div>
+
+    <!-- Dynamic Features -->
+    <div class="funded-feats" id="fundedFeats">
+      <div class="feat"><span class="tick">✓</span> 7 days unlimited voice & chat</div>
+      <div class="feat"><span class="tick">✓</span> Live companion + history</div>
+      <div class="feat"><span class="tick">✓</span> 1 ID = 1 Free only (stored locally)</div>
+    </div>
+
+    <!-- Single CTA -->
+    <button class="funded-cta cta-free" id="fundedCta" type="button">Activate Free — 7 Days</button>
+    <div class="funded-hint" id="freeHint">Practice mode — no payment</div>
+
+    <div class="key-divider">OR</div>
+    <div class="key-box" id="keyBox">
+      <div class="key-label">🔑 I have an activation key</div>
+      <div class="key-row">
+        <input class="game-id" id="keyInput" placeholder="MUSKU-XXXX-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
+        <button class="key-activate" id="keyActivateBtn" type="button">Activate</button>
+      </div>
+      <div class="key-hint" id="keyHint">Enter your secure activation key to unlock your plan on this device</div>
+    </div>
+
+    <div class="funded-foot">
+      <button class="link-btn" id="backBtn" type="button">← Back</button>
+      <span id="fundedFootHint" style="font-size:10px; color:#6b6b80;"></span>
+      <button class="link-btn" id="openAppBtn" type="button" style="color:var(--a1); font-weight:800;">Open App →</button>
+    </div>
+  </div>
+
+  <!-- Inline msg — card ke niche se slide (Open App no plan) -->
+  <div id="inlineMsg" class="inline-msg hidden" role="status" aria-live="polite"></div>
+
+</div>
+<!-- WIP Popup — Pay Now = Work in Progress -->
+<div id="wipOverlay" class="wip-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="wipTitle">
+  <div class="wip-card">
+    <div class="wip-icon">🚧</div>
+    <div class="wip-title" id="wipTitle">Work in Progress</div>
+    <div class="wip-desc">Payment gateway is currently under development.<br>Only <b style="color:#fff;">FREE-S2 — 7 Days Free</b> is active at the moment.<br>Pro plans (₹99 / ₹199 / ₹999) coming soon.</div>
+    <button class="wip-ok" id="wipOk" type="button">OK</button>
+  </div>
+</div>
+<div class="auth-toast" id="toast"></div>
+</div><!-- /#mFrame -->
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="auth.js?v=4"></script>
+<script>
+// activate page specific
+document.addEventListener("DOMContentLoaded", function(){
+  if(window.MuskuAuth) window.MuskuAuth.initActivate();
+});
+// Auto theme every 3s — all 9 themes 1-by-1
+(function(){
+  var themes=["amethyst","oceanic","obsidian","emerald","monochrome","crimson","sunset","golden","cyberpunk","aurora","holographic","chrome"];
+  var cur=document.body.getAttribute("data-theme")||"amethyst";
+  var idx=themes.indexOf(cur); if(idx<0) idx=0;
+  var timer=setInterval(function(){
+    idx=(idx+1)%themes.length;
+    document.body.setAttribute("data-theme", themes[idx]);
+  },3000);
+})();
+</script>
+</body>
+</html>

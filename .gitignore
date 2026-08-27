@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.env
+
+# Local Musku User & Memory data
+musku_chat/
+musku_data/
+musku_users/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
