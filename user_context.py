@@ -17,11 +17,17 @@ import json
 import os
 import threading
 
-def decrypt_value(v):
-    return v.strip() if isinstance(v, str) else v
-
-def encrypt_value(v):
-    return v
+try:
+    from crypto_utils import decrypt_value as _decrypt, encrypt_value as _encrypt
+    def decrypt_value(v):
+        return _decrypt(v) if isinstance(v, str) else v
+    def encrypt_value(v):
+        return _encrypt(v) if isinstance(v, str) else v
+except Exception:
+    def decrypt_value(v):
+        return v.strip() if isinstance(v, str) else v
+    def encrypt_value(v):
+        return v
 
 from tenant_ctx import safe_uid, set_uid, get_uid, is_owner  # single shared tenant ctx
 
@@ -41,28 +47,38 @@ DEFAULT_CONFIG = {
 _OWNER = "owner"
 
 # --------------------------------------------------------------------------- #
-# runtime persona / relationship_mode switch (Phase 4)
+# runtime persona / relationship_mode switch (Phase 4) — per-user flexible
 # --------------------------------------------------------------------------- #
-# canonical modes -> trigger phrases (command-like to avoid false positives)
+# Unified with persona/relationship_engine aliases: jo bhi user bole (dost/bestie/yaar/jigri/gf/partner/life partner/beti/caring) wahi ban jao
+# Boss is NOT a mode — Boss word is purged, only aap/custom name
 PERSONA_KEYWORDS = [
     ("best_friend", [
-        "best friend ban", "best friend mode", "bestie mode", "jaise pehle",
-        "pehle jaise", "normal mode", "default mode", "waise hi reh",
-        "apne jaisa reh", "best friend ki tarah",
+        "best friend ban", "best friend mode", "bestie mode", "bestie ban", "bff ban", "dost ban", "dost bano",
+        "dost ki tarah", "dost mode", "best friend ki tarah", "jaise pehle", "pehle jaise", "normal mode", "default mode", "waise hi reh", "apne jaisa reh",
     ]),
-    ("friend", [
-        "dost ban", "dost ki tarah", "dost mode", "friend mode", "casual ban",
-        "casual mode", "buddy ban", "bhai ki tarah", "chill mode", "dost bano",
+    ("jigri", [
+        "jigri ban", "jigri dost ban", "yaar ban", "yarr ban", "yaar ki tarah", "jigri ki tarah", "jigri mode", "yaar mode", "buddy ban",
     ]),
-    ("formal", [
-        "formal ban", "formal mode", "professional ban", "professional mode",
-        "respectful ban", "aap jaisa ban", "boss ki tarah", "professional reh",
-        "respectful mode",
+    ("beti", [
+        "beti ban", "beti ki tarah", "beti mode", "daughter ban", "bachi ban",
     ]),
+    ("caring", [
+        "caring ban", "caring companion ban", "companion ban", "caring mode", "supporter ban",
+    ]),
+    ("girlfriend", [
+        "girlfriend ban", "gf ban", "partner ban", "life partner ban", "life-partner ban", "soulmate ban", "jaan ban", "premi ban",
+        "girlfriend ki tarah", "partner ki tarah", "life partner ki tarah", "soulmate ki tarah",
+    ]),
+    # generic fallback — "meri X ban jao" will be caught by alias engine too
 ]
 
 PERSONA_SWITCH_REPLY = {
-    "best_friend": "Okay dear, waise hi rahungi — tumhari best friend!",
+    "best_friend": "Okay dear, waise hi rahungi — tumhari best friend! 🥰",
+    "jigri": "Okay yaar, ab se bilkul jigri dost ki tarah — chulbul masti me! 😊",
+    "beti": "Okay, ab se pyaari beti ki tarah — cute aur caring! 🌸",
+    "caring": "Okay, ab se tumhari caring companion ki tarah — pyaar se khayal rakhungi! 💖",
+    "girlfriend": "Okay, ab se tumhari pyaari girlfriend/partner ki tarah — thodi flirty, bahut pyaari! 🥰",
+    # legacy aliases
     "friend": "Okay, ab se dost ki tarah baat karungi!",
     "formal": "Okay, ab se thoda formal aur respectful rahungi.",
 }
@@ -73,16 +89,63 @@ def detect_persona_mode(text) -> str | None:
     if not text:
         return None
     t = " ".join(str(text).lower().split())
+    # 1) direct PERSONA_KEYWORDS match (highest priority — explicit "X ban" commands)
     for mode, kws in PERSONA_KEYWORDS:
         for kw in kws:
             if kw in t:
                 return mode
+    # 2) fallback to relationship_engine alias engine (covers dost/yaar/bestie/gf/partner etc + custom)
+    try:
+        from persona.relationship_engine import get_relationship_profile
+        # try to extract "meri X ban" pattern — let alias engine decide
+        import re
+        # find "meri <phrase> ban" or "<phrase> ban jao/ban" — use last match
+        m = re.search(r"meri\s+([a-zA-Z\u0900-\u097F\s_-]{2,30})\s+ban", t)
+        if m:
+            cand = m.group(1).strip()
+            prof = get_relationship_profile(cand)
+            # if custom, prof["id"] will be cand itself (len>=2) — allow custom per-user
+            if prof and prof.get("id"):
+                pid = prof["id"]
+                # Boss is purged — map boss to best_friend/aap
+                if pid.lower() in ("boss","bosss","b0ss","s2"):
+                    return "best_friend"
+                return pid
+        # also direct contains check via alias keys (e.g. text contains "bestie" even without "ban")
+        for cand in ["best friend","bestie","bff","dost","jigri","yaar","beti","caring","girlfriend","gf","partner","life partner","soulmate","jaan"]:
+            if cand in t and ("ban" in t or "bano" in t or "ban jao" in t or "banna" in t or "ki tarah" in t):
+                prof = get_relationship_profile(cand)
+                return prof["id"]
+        # ultra generic: "... ban jao" with any word 2-20 chars — treat as custom
+        mg = re.search(r"\b([a-z]{2,20})\s+ban\s*(jao|ja|banao)?\b", t)
+        if mg:
+            cand2 = mg.group(1).strip()
+            if cand2 not in ("boss","bosss","b0ss"):
+                prof2 = get_relationship_profile(cand2)
+                return prof2["id"]
+    except Exception:
+        pass
     return None
 
 
 def set_relationship_mode(uid, mode: str) -> dict:
     """Persist a per-user relationship_mode; returns saved config."""
+    # allow any engine mode + custom (len>=2), not just PERSONA_SWITCH_REPLY keys
+    try:
+        from persona.relationship_engine import get_relationship_profile
+        prof = get_relationship_profile(mode)
+        # if engine returns a valid profile, persist that id
+        if prof and prof.get("id"):
+            mid = prof["id"]
+            if mid.lower() in ("boss","bosss","b0ss"):
+                mid = "best_friend"
+            return save_config({"relationship_mode": mid}, uid)
+    except Exception:
+        pass
     if mode not in PERSONA_SWITCH_REPLY:
+        # fallback: if unknown but len>=2 treat as custom
+        if isinstance(mode, str) and len(mode.strip()) >= 2 and mode.strip().lower() not in ("boss","bosss","b0ss"):
+            return save_config({"relationship_mode": mode.strip().lower()}, uid)
         mode = "best_friend"
     return save_config({"relationship_mode": mode}, uid)
 
@@ -194,7 +257,22 @@ def _read_json(path):
 
 def _write_json(path, data):
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
+        # atomic write: temp -> replace (crash par 00 bytes corrupt nahi hoga)
+        import tempfile
+        dir_name = os.path.dirname(os.path.abspath(path)) or "."
+        os.makedirs(dir_name, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=dir_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+        finally:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except Exception:
+                pass
     except Exception as e:
         print(f"[UserConfig Write Error]: {e}")

@@ -24,6 +24,23 @@ except Exception:
 
 logger = logging.getLogger("MUSKU.Live")
 
+def _dbg_log(msg):
+    # Only when MUSKU_LIVE_DEBUG=1 — warna spam (har audio chunk pe [GEMINI] log)
+    if not bool(getattr(cfg, "MUSKU_LIVE_DEBUG", False)):
+        return
+    try:
+        import os
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        p = os.path.join(base, "debug_greeting.log")
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+    except Exception:
+        pass
+    try:
+        print(msg, flush=True)
+    except Exception:
+        pass
+
 
 def _apply_mic_gain(pcm: bytes) -> bytes:
     """Quiet mics (headset) ko boost karke Gemini VAD tak pahunchao.
@@ -54,7 +71,7 @@ except ImportError:
     genai = None  # type: ignore
     types = None  # type: ignore
 
-_MIN_AI_PCM = 480
+_MIN_AI_PCM = 160  # greeting chunk tail ~3ms bhi play karo — 480 se pura vakya ka tail drop ho raha tha
 _LIVE_DEBUG = bool(getattr(cfg, "MUSKU_LIVE_DEBUG", False))
 
 
@@ -63,8 +80,8 @@ def _live_dbg(msg: str):
         print(msg)
 
 
-def build_musku_connect_config(system_prompt: str):
-    """Musku Live connect — default VAD, no realtimeInputConfig."""
+def build_musku_connect_config(system_prompt: str, language: str = "hinglish"):
+    """Musku Live connect — default VAD, with language-locked transcription."""
     speech = types.SpeechConfig(
         voice_config=types.VoiceConfig(
             prebuilt_voice_config=types.PrebuiltVoiceConfig(
@@ -72,27 +89,44 @@ def build_musku_connect_config(system_prompt: str):
             ),
         ),
     )
-    tools = build_function_declarations(
+    decls = build_function_declarations(
         use_live_tools=cfg.LIVE_TOOLS_ENABLED,
         slim=getattr(cfg, "LIVE_TOOLS_SLIM", False),
     )
+    tools = [types.Tool(function_declarations=decls)] if decls else []
+    # Pro: language_code set karega taaki \"ある\" jaise Japanese mis-detect na ho
+    try:
+        lang_code = cfg.get_transcription_language_code(language)
+    except Exception:
+        lang_code = "hi-IN"
+    try:
+        in_trans = types.AudioTranscriptionConfig(language_codes=[lang_code])
+    except Exception:
+        in_trans = types.AudioTranscriptionConfig()
+    try:
+        out_trans = types.AudioTranscriptionConfig(language_codes=[lang_code])
+    except Exception:
+        out_trans = types.AudioTranscriptionConfig()
     return types.LiveConnectConfig(
         response_modalities=[types.Modality.AUDIO],
         system_instruction=types.Content(parts=[types.Part(text=system_prompt)]),
         speech_config=speech,
         tools=tools,
-        input_audio_transcription=types.AudioTranscriptionConfig(),
-        output_audio_transcription=types.AudioTranscriptionConfig(),
+        input_audio_transcription=in_trans,
+        output_audio_transcription=out_trans,
     )
 
 
 class MuskuLiveSession:
     """Per-client Musku Gemini Live session."""
 
-    def __init__(self, browser_ws: Any, api_key: str, system_prompt: str = None):
+    def __init__(self, browser_ws: Any, api_key: str, system_prompt: str = None, uid: str = None):
         self._ws = browser_ws
         self._api_key = api_key
+        self._uid = uid
         self._session = None
+        from live.telemetry import TurnTelemetry
+        self._telemetry = TurnTelemetry()
         self._closed = False
         self._logged_first_audio = False
         self._user_turn_buf = ""
@@ -101,8 +135,12 @@ class MuskuLiveSession:
         self._loop = None
         self._system_prompt = system_prompt or cfg.get_live_system_prompt()
         self._greeted = False
+        self._greeted_time = 0.0
         self._pending_greeting = None
         self._greet_on_connect = False
+        # Echo suppression: last model output for self-talk filter
+        self._last_model_text = ""
+        self._last_model_time = 0.0
         from live.streak_praise import subscribe_streak
         subscribe_streak(self, lambda: self._session, lambda: self._loop)
 
@@ -172,7 +210,16 @@ class MuskuLiveSession:
             return
 
         client = genai.Client(api_key=self._api_key)
-        config = build_musku_connect_config(self._system_prompt)
+        # language-aware config: use uid's language so transcription matches profile language
+        lang_for_cfg = "hinglish"
+        try:
+            if self._uid:
+                from user_context import load_config as _load_cfg
+                _uc = _load_cfg(self._uid)
+                lang_for_cfg = _uc.get("language", "hinglish")
+        except Exception:
+            pass
+        config = build_musku_connect_config(self._system_prompt, language=lang_for_cfg)
         model = getattr(cfg, "DEFAULT_MODEL", "gemini-3.1-flash-live-preview")
 
         await self._send({"type": "status", "status": "connecting_gemini"})
@@ -188,9 +235,13 @@ class MuskuLiveSession:
                 # Flush any greeting queued before Gemini connected (e.g. /api/start)
                 if self._greet_on_connect or self._pending_greeting is not None:
                     try:
-                        await self.send_greeting(self._pending_greeting)
+                        await self.send_greeting(self._pending_greeting, force=True)
                     except Exception as e:
                         logger.debug("pending greeting flush: %s", e)
+                    finally:
+                        self._greet_on_connect = False
+                        self._pending_greeting = None
+                # Auto-greeting disabled — desktop jaisa: greeting ONLY on START press, bar-bar nahi
 
                 browser_task = asyncio.create_task(self._browser_loop())
                 gemini_task = asyncio.create_task(self._gemini_loop())
@@ -210,44 +261,55 @@ class MuskuLiveSession:
         finally:
             self._closed = True
             self._session = None
+            self._greeted = False
+            self._greet_on_connect = False
 
     async def send_proactive_prompt(self, prompt: str):
-        """Proactive utterance — break, water, silence check-in."""
+        """Proactive utterance — break, water, silence check-in.
+
+        gemini-3.1-flash-live-preview allows send_client_content ONLY for seeding
+        initial history; mid-conversation text MUST use send_realtime_input.
+        """
         if not self._session or not prompt:
             return
-        await self._session.send_client_content(
-            turns=types.Content(role="user", parts=[types.Part(text=str(prompt))]),
-            turn_complete=True,
-        )
+        await self._session.send_realtime_input(text=str(prompt))
 
     async def send_realtime_text(self, text: str):
         if not self._session or not text:
             return
         await self._session.send_realtime_input(text=str(text))
 
-    async def send_greeting(self, script: str | None = None):
-        """START greeting — dedupe + queue until Gemini session ready.
-
-        Dono source (/api/start server aur JS [INTERNAL - START GREETING]) isi
-        method se jaate hain; `_greeted` double-greeting rokta hai. Session ready
-        nahi hai toh queue karo, run() connect par flush karega."""
-        if self._greeted:
+    async def send_greeting(self, script: str | None = None, force: bool = False):
+        """START greeting — dedupe + queue until Gemini session ready."""
+        _dbg_log(f"[GREETING] send_greeting called script={script!r} force={force} _greeted={self._greeted} has_session={bool(self._session)}")
+        if self._greeted and not force:
+            _dbg_log("[GREETING] blocked by dedupe")
             return
         if not self._session:
+            _dbg_log(f"[GREETING] queued (no session) script={script!r}")
             self._pending_greeting = script
             return
         from personal_profile import build_start_greeting_prompt
         prompt = build_start_greeting_prompt(script)
+        _dbg_log(f"[GREETING] sending to Gemini prompt={prompt[:120]!r} ...")
         self._greeted = True
-        await self.send_proactive_prompt(prompt)
+        try:
+            import time as _t
+            self._greeted_time = _t.time()
+        except Exception:
+            pass
+        try:
+            await self.send_proactive_prompt(prompt)
+            _dbg_log("[GREETING] send_realtime_input done")
+        except Exception as e:
+            _dbg_log(f"[GREETING] send failed: {e}")
+            import traceback; traceback.print_exc()
+            _dbg_log(traceback.format_exc())
 
     async def send_client_text(self, text: str):
         if not self._session or not text:
             return
-        await self._session.send_client_content(
-            turns=types.Content(role="user", parts=[types.Part(text=str(text))]),
-            turn_complete=True,
-        )
+        await self._session.send_realtime_input(text=str(text))
 
     async def update_system_prompt(self, prompt: str):
         """Language/persona update — existing connection par realtime instruction
@@ -293,12 +355,14 @@ class MuskuLiveSession:
             return
 
         if msg.get("audio"):
+            self._telemetry.mark("MIC_CAPTURE")
             pcm = base64.b64decode(str(msg["audio"]))
             pcm = _apply_mic_gain(pcm)
             from live.mic_meter import publish_pcm_meter
             publish_pcm_meter(bytes(pcm))
             blob = types.Blob(mime_type="audio/pcm;rate=16000", data=pcm)
             await self._session.send_realtime_input(audio=blob)
+            self._telemetry.mark("WS_UPLOAD")
             return
 
         mtype = msg.get("type")
@@ -308,15 +372,19 @@ class MuskuLiveSession:
             await self._session.send_realtime_input(video=blob)
             return
 
-        if mtype == "text" and msg.get("text"):
+        # Defensive: accept both {type:"text",text:...} and legacy {text:...} (index.html fix sends type)
+        if msg.get("text") and (mtype == "text" or mtype is None or mtype == ""):
             text = str(msg["text"]).strip()
+            _dbg_log(f"[BROWSER] text received: {text[:150]!r}")
             if not text:
                 return
             if "[INTERNAL - START GREETING" in text or "[INTERNAL — START GREETING" in text:
+                _dbg_log(f"[BROWSER] START GREETING detected: {text!r}")
                 from personal_profile import get_respectful_start_greeting
                 m = re.search(r"START GREETING:\s*(.*?)]", text)
                 script = m.group(1).strip() if (m and m.group(1).strip()) else get_respectful_start_greeting()
-                await self.send_greeting(script)
+                _dbg_log(f"[BROWSER] parsed script={script!r} -> calling send_greeting")
+                await self.send_greeting(script, force=True)
                 return
             if "[INTERNAL SPEAK]" in text:
                 m = re.search(r"\[INTERNAL SPEAK\]\s*(.*)", text, re.S)
@@ -347,12 +415,66 @@ class MuskuLiveSession:
                         boss_name=uconf.get("user_name", "S2"),
                         language=uconf.get("language", "hinglish"),
                         relationship_mode=mode,
+                        uid=self._uid,
                     )
                     await self.update_system_prompt(new_prompt)
                     await self.send_proactive_prompt(
                         "[INTERNAL — yeh user ki command hai, isse question mat samjho. "
                         "Bss natural awaaz se confirm karo.]\n" + PERSONA_SWITCH_REPLY[mode]
                     )
+                    return
+            except Exception:
+                pass
+            # Repeated hello/heylo — bar-bar same greeting ko playful tease karo, same generic hello repeat nahi
+            try:
+                import re as _re
+                _low = text.lower()
+                _hellos = _re.findall(r"\b(hello|heylo|helo|hey|hii|hi)\b", _low)
+                _is_repeat_hello = len(_hellos) >= 3 or (len(_hellos) >= 2 and len(_low.split()) <= 5) or _low.strip() in ("heylo", "hello", "heylo heylo", "hello hello")
+                # also check last 2 turns were hello
+                if not _is_repeat_hello:
+                    try:
+                        from memory import turn_context as _tc
+                        _snap = _tc.snapshot(self._uid)
+                        _last_u = (_snap.get("last_user") or "").lower()
+                        if _last_u and _re.search(r"\b(hello|heylo|hi)\b", _last_u) and _re.search(r"\b(hello|heylo|hi)\b", _low):
+                            # consecutive hello
+                            _is_repeat_hello = True
+                    except Exception:
+                        pass
+                if _is_repeat_hello and "[INTERNAL" not in text:
+                    # inject playful acknowledgement, brain will vary
+                    text = text + " [INTERNAL HINT: user repeated hello playfully 3-4 times, don't just echo hello back. Tease cutely: 'arey heylo heylo, kya baat hai, itna pyaara hello!' vary each time, 1 short sentence, chulbul.]"
+            except Exception:
+                pass
+            # Polite boundary — gali / abusive / nude (global deterministic, type= text)
+            try:
+                from persona.abuse_policy import is_abusive, get_polite_boundary_reply
+                if "[INTERNAL" not in text and is_abusive(text):
+                    reply_abuse = get_polite_boundary_reply(self._uid)
+                    # user bubble already set, now model polite reply
+                    self._model_turn_buf = live_display_text(reply_abuse)
+                    await self._send({
+                        "type": "transcription",
+                        "role": "user",
+                        "text": self._user_turn_buf,
+                    })
+                    await self._send({
+                        "type": "transcription",
+                        "role": "model",
+                        "text": self._model_turn_buf,
+                    })
+                    # Voice me bhi Musku yehi bole
+                    try:
+                        await self.send_proactive_prompt(reply_abuse)
+                    except Exception:
+                        pass
+                    # Deterministic turn save (no Gemini call for abusive input)
+                    try:
+                        import asyncio as _asyncio
+                        _asyncio.create_task(self._persist_and_sync(self._user_turn_buf, reply_abuse))
+                    except Exception:
+                        pass
                     return
             except Exception:
                 pass
@@ -380,17 +502,34 @@ class MuskuLiveSession:
             await self._session.send_tool_response(function_responses=fr)
 
     async def _on_gemini(self, msg):
+        # DEBUG: log every gemini message type — only when MUSKU_LIVE_DEBUG=1
+        if _LIVE_DEBUG:
+            try:
+                has_sc = bool(getattr(msg, "server_content", None))
+                has_tool = bool(getattr(msg, "tool_call", None))
+                _dbg_log(f"[GEMINI] msg received has_sc={has_sc} has_tool={has_tool} msg={str(msg)[:500]!r}")
+            except Exception:
+                pass
         sc = getattr(msg, "server_content", None)
         if sc is not None:
             if getattr(sc, "interrupted", False):
-                await self._send({"type": "interrupted"})
-                if self._model_turn_buf.strip():
-                    try:
-                        from memory import turn_context as _tctx
-                        _tctx.record_last_musku_reply(self._model_turn_buf)
-                    except Exception:
-                        pass
-                self._model_turn_buf = ""
+                # Greeting ke pehle 3 sec me interrupted ignore — echo se greeting ka tail cut ho raha tha (good evening ke baad ruk jaana)
+                try:
+                    import time as _t
+                    if self._greeted and (_t.time() - self._greeted_time) < 3.0:
+                        _dbg_log("[INTERRUPTED] ignored during greeting grace (3s)")
+                    else:
+                        await self._send({"type": "interrupted"})
+                        if self._model_turn_buf.strip():
+                            try:
+                                from memory import turn_context as _tctx
+                                _tctx.record_last_musku_reply(self._model_turn_buf, uid=self._uid)
+                            except Exception:
+                                pass
+                        self._model_turn_buf = ""
+                except Exception:
+                    await self._send({"type": "interrupted"})
+                    self._model_turn_buf = ""
 
             mt = getattr(sc, "model_turn", None)
             if mt is not None and getattr(mt, "parts", None):
@@ -404,11 +543,18 @@ class MuskuLiveSession:
                             except Exception:
                                 continue
                         if len(data) < _MIN_AI_PCM:
+                            # Observable: don't silently drop — log telemetry
+                            try:
+                                _dbg_log(f"[AUDIO] dropped chunk={len(data)} bytes (<{_MIN_AI_PCM})")
+                                bus.publish("AUDIO_DROPPED", {"len": len(data)})
+                            except Exception:
+                                pass
                             continue
                         if not self._logged_first_audio:
                             self._logged_first_audio = True
+                            self._telemetry.mark("GEMINI_FIRST_AUDIO")
                             _live_dbg(f"[Musku-Live] First AI audio ({len(data)} bytes)")
-                            bus.publish("AI_AUDIO_CHUNK", {"len": len(data)})
+                            bus.publish("AI_AUDIO_CHUNK", {"len": len(data), "queue": "muskuPlayPcm"})
                         try:
                             from monitoring.user_idle_checkin import get_user_idle_checkin
                             eng = get_user_idle_checkin()
@@ -423,7 +569,43 @@ class MuskuLiveSession:
             if user_txt is not None and getattr(user_txt, "text", None):
                 is_finished = bool(getattr(user_txt, "finished", False))
                 txt = live_display_text(str(user_txt.text))
-                if txt.strip():
+                # Echo suppression: apne hi output ka speaker leak user me na aaye
+                _is_echo = False
+                try:
+                    if txt.strip() and self._last_model_text:
+                        import time as _t, difflib as _dl, re as _re
+                        _now = _t.time()
+                        # greeting echo window longer (greeting is long, tail may arrive late)
+                        _win = 4.0 if self._greeted else 2.5
+                        if _now - self._last_model_time < _win:
+                            a = _re.sub(r"\s+", " ", txt.strip().lower())
+                            b = _re.sub(r"\s+", " ", self._last_model_text.strip().lower())
+                            if len(a) >= 8 and len(b) >= 8:
+                                # greeting prefix echo: both start with "good morning/afternoon/evening"
+                                if a.startswith("good ") and b.startswith("good "):
+                                    # first 20 chars same -> definitely echo even if rest differs (maybe vs main bhi)
+                                    if a[:20] == b[:20]:
+                                        logger.debug("Echo drop (greeting prefix): user=%r model=%r", txt[:60], b[:60])
+                                        _is_echo = True
+                                    else:
+                                        ratio = _dl.SequenceMatcher(None, a[:80], b[:80]).ratio()
+                                        if ratio > 0.65:
+                                            logger.debug("Echo drop (greeting %.2f): user=%r model=%r", ratio, txt[:60], b[:60])
+                                            _is_echo = True
+                                elif a in b or b in a:
+                                    logger.debug("Echo drop (substring): user=%r model=%r", txt[:60], b[:60])
+                                    _is_echo = True
+                                else:
+                                    ratio = _dl.SequenceMatcher(None, a, b).ratio()
+                                    if ratio > 0.70:
+                                        logger.debug("Echo drop (%.2f): user=%r model=%r", ratio, txt[:60], b[:60])
+                                        _is_echo = True
+                except Exception:
+                    pass
+                if _is_echo:
+                    # drop this user transcription chunk only, model output still processed below
+                    pass
+                elif txt.strip():
                     self._prepare_user_piece(txt)
                     was_empty = not self._user_turn_buf.strip()
                     self._user_turn_buf = self._merge_transcript(self._user_turn_buf, txt)
@@ -445,7 +627,7 @@ class MuskuLiveSession:
                     if is_finished:
                         try:
                             from memory import turn_context as _tctx
-                            _tctx.record_last_user_message(self._user_turn_buf)
+                            _tctx.record_last_user_message(self._user_turn_buf, uid=self._uid)
                         except Exception:
                             pass
                         bus.publish("USER_SPEECH_FINAL", self._user_turn_buf)
@@ -495,8 +677,19 @@ class MuskuLiveSession:
             if out_txt is not None and getattr(out_txt, "text", None):
                 txt = live_display_text(str(out_txt.text))
                 if txt.strip():
+                    # Greeting safety-net: greeting me hehe/haha hatao (only funny moment pe allowed)
+                    if self._greeted and (self._user_turn_buf.strip() in ("", "[START greeting]") or "[START greeting]" in self._user_turn_buf):
+                        txt = re.sub(r"\s*(Hehe|hehe|Haha|haha)[.!]*\s*$", "", txt).strip()
                     self._model_turn_buf = self._merge_transcript(self._model_turn_buf, txt)
+                    # store for echo suppression
+                    try:
+                        import time as _t
+                        self._last_model_text = self._model_turn_buf
+                        self._last_model_time = _t.time()
+                    except Exception:
+                        pass
                     _live_dbg(f"[Musku-Live] Musku: {self._model_turn_buf[:80]}")
+                    # Greeting: both bubble text + voice (was voice-only, now both as per requirement)
                     await self._send({
                         "type": "transcription",
                         "role": "model",
@@ -507,7 +700,15 @@ class MuskuLiveSession:
                     t = getattr(part, "text", None)
                     if t:
                         txt = live_display_text(str(t))
+                        if self._greeted and (self._user_turn_buf.strip() in ("", "[START greeting]") or "[START greeting]" in self._user_turn_buf):
+                            txt = re.sub(r"\s*(Hehe|hehe|Haha|haha)[.!]*\s*$", "", txt).strip()
                         self._model_turn_buf = self._merge_transcript(self._model_turn_buf, txt)
+                        try:
+                            import time as _t
+                            self._last_model_text = self._model_turn_buf
+                            self._last_model_time = _t.time()
+                        except Exception:
+                            pass
                         await self._send({
                             "type": "transcription",
                             "role": "model",
@@ -521,7 +722,7 @@ class MuskuLiveSession:
                 if reply:
                     try:
                         from memory import turn_context as _tctx
-                        _tctx.record_last_musku_reply(reply)
+                        _tctx.record_last_musku_reply(reply, uid=self._uid)
                     except Exception:
                         pass
                 if reply:
@@ -537,6 +738,14 @@ class MuskuLiveSession:
                 await self._send({"type": "turnComplete"})
                 self._close_user_turn()
                 self._model_turn_buf = ""
+                # Non-blocking telemetry emit (no-op unless MUSKU_LIVE_TELEMETRY=1)
+                try:
+                    rep = self._telemetry.report()
+                    if rep:
+                        await self._send({"type": "debug_telemetry", "metrics": rep})
+                except Exception:
+                    pass
+                self._telemetry.reset()
                 bus.publish("TURN_COMPLETE", {})
 
         tc = getattr(msg, "tool_call", None)
@@ -553,18 +762,27 @@ class MuskuLiveSession:
     async def _persist_and_sync(self, user: str, reply: str):
         """Turn save + deep memory consolidation + memory_sync broadcast."""
         try:
-            updated = await asyncio.to_thread(self._persist_turn_and_consolidate, user, reply)
+            updated = await asyncio.to_thread(self._persist_turn_and_consolidate, user, reply, self._uid)
             if updated:
                 await self._send({"type": "memory_sync", "memories": updated})
         except Exception as e:
             logger.warning("Memory sync failed: %s", e)
 
     @staticmethod
-    def _persist_turn_and_consolidate(user: str, reply: str):
+    def _persist_turn_and_consolidate(user: str, reply: str, uid: str = None):
+        # asyncio.to_thread drops the tenant ContextVar, so re-establish the
+        # verified uid here — otherwise paths.* and memory writes would hit the
+        # shared "owner" scope and leak across users.
+        if uid:
+            try:
+                from tenant_ctx import set_uid
+                set_uid(uid)
+            except Exception:
+                pass
         try:
             from brain.memory_bridge import save_chat_log, _consolidate_background
-            save_chat_log(None, user, reply, consolidate=False)
-            _consolidate_background(user)
+            save_chat_log(None, user, reply, consolidate=False, uid=uid)
+            _consolidate_background(user, uid=uid)
             from memory import store as _mstore
             return _mstore.load_all()
         except Exception as e:
@@ -655,8 +873,14 @@ class MuskuLiveSession:
             except Exception:
                 return {"result": "Search unavailable."}
 
-        # Any legacy tool call targeting PC control is politely refused conversationally
-        return {"result": "Main aapka computer directly control nahi kar sakti, Boss. Main aapse baat karne aur aapke sawaalon ke jawab dene ke liye yahan hoon."}
+        # PC / image / code etc — professional upgrade note with per-user name (global fixed for all users)
+        try:
+            from persona.name_resolver import resolve_greeting_term
+            from persona.identity_policy import get_upgrade_note
+            g = resolve_greeting_term()
+            return {"result": get_upgrade_note(g if g != "dear" else "")}
+        except Exception:
+            return {"result": "Jii, jab S2 Sir mujhe upgrade karenge to ye function add kar denge, main is baat ko note kar rahi hu. 🥰"}
 
     async def _send(self, obj: dict):
         try:

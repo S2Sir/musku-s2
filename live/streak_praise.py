@@ -27,7 +27,11 @@ def subscribe_streak(owner, session_getter, loop_getter):
     session_getter -> active Live session (ya None)
     loop_getter    -> us session ka running event loop
     """
-    from realtime.event_bus import bus
+    try:
+        from realtime.event_bus import bus
+    except Exception as e:
+        logger.debug("realtime bus unavailable, streak praise disabled: %s", e)
+        return lambda *a, **kw: None
 
     def _handler(payload=None):
         data = payload or {}
@@ -53,14 +57,7 @@ async def _inject(session_getter, instruction):
         session = session_getter() if callable(session_getter) else session_getter
         if session is None:
             return
-        from google.genai import types
-        await session.send_client_content(
-            turns=types.Content(
-                role="user",
-                parts=[types.Part(text=_PREFIX + instruction)],
-            ),
-            turn_complete=True,
-        )
+        await session.send_realtime_input(text=_PREFIX + instruction)
         logger.debug("Streak praise injected")
     except Exception as e:
         logger.debug("Streak praise inject failed: %s", e)

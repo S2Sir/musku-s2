@@ -65,8 +65,13 @@ Output:"""
             return
         if category not in MEMORY_FILE_MAP:
             category = "profile"
-        if fact and len(fact) >= 4:
-            brain._save_memory(category, fact, source=user_text)
+        if fact and len(fact) >= 8:
+            # PRO: Smart threshold - skip low-value facts
+            try:
+                from memory.service import save_memory as _svc_save
+                _svc_save(category, fact, source=user_text, importance=0.7, confidence=0.7)
+            except Exception:
+                brain._save_memory(category, fact, source=user_text)
     except Exception as e:
         print(f"[Memory Extraction Error]: {e}")
 
@@ -102,12 +107,16 @@ def _extract_realtime_memory(brain, user_text):
             for item in json.loads(m.group(0)):
                 cat = str(item.get("category", "profile")).strip()
                 fact = re.sub(r"\s+", " ", str(item.get("fact", "") or "")).strip()
-                if cat in MEMORY_FILE_MAP and fact and len(fact) >= 4:
-                    brain._save_memory(cat, fact, source="realtime-chat")
+                if cat in MEMORY_FILE_MAP and fact and len(fact) >= 8:
+                    try:
+                        from memory.service import save_memory as _svc_save2
+                        _svc_save2(cat, fact, source="realtime-chat", importance=0.65, confidence=0.65)
+                    except Exception:
+                        brain._save_memory(cat, fact, source="realtime-chat")
     except Exception as e:
         print(f"[Realtime Memory Extract Error]: {e}")
 
-def save_chat_log(brain, user_text, musku_reply, extra=None, consolidate=True):
+def save_chat_log(brain, user_text, musku_reply, extra=None, consolidate=True, uid=None):
     from brain.response import _grammar_fix
     if brain is None:
         brain = _resolve_brain()
@@ -135,8 +144,8 @@ def save_chat_log(brain, user_text, musku_reply, extra=None, consolidate=True):
     
     try:
         from memory import turn_context as _tctx
-        _tctx.update_after_turn(user_text, entry["musku_replied"])
-        _cele = _tctx.claim_streak_celebration()
+        _tctx.update_after_turn(user_text, entry["musku_replied"], uid=uid)
+        _cele = _tctx.claim_streak_celebration(uid=uid)
         if _cele:
             try:
                 from realtime.event_bus import bus
@@ -148,7 +157,7 @@ def save_chat_log(brain, user_text, musku_reply, extra=None, consolidate=True):
 
     try:
         from brain import conversation as _conv
-        _conv.record_exchange(user_text, entry["musku_replied"])
+        _conv.record_exchange(user_text, entry["musku_replied"], uid=uid)
     except Exception:
         pass
     
@@ -160,7 +169,7 @@ def save_chat_log(brain, user_text, musku_reply, extra=None, consolidate=True):
         threading.Thread(target=_consolidate_background, args=(user_text,), daemon=True).start()
 
 
-def _consolidate_background(user_text):
+def _consolidate_background(user_text, uid=None):
     """Deep recollection engine — multi-turn slice se ADD/UPDATE/REMOVE. Non-blocking.
     Saath me single-message lightweight extract bhi (fallback)."""
     try:

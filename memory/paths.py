@@ -19,8 +19,10 @@ LEGACY_HISTORY_DIR = os.path.join(BASE_DIR, "musku_chat")
 LOCK = threading.Lock()
 
 # uid-independent constants
-CONTEXT_WINDOW = 10
+CONTEXT_WINDOW = 20
 MEMORY_MAX_PER_CATEGORY = 60
+# History recall window for "last time" queries — real human like
+HISTORY_RECALL_WINDOW = 30
 
 # category -> storage key inside its file (uid-independent)
 MEMORY_KEY_NAMES = {
@@ -172,6 +174,22 @@ class _LiveCatFiles:
 
     def __getitem__(self, category):
         return (MEMORY_FILE_MAP[category], MEMORY_KEY_NAMES.get(category, "items"))
+
+    def __iter__(self):
+        return iter(_CAT_FILENAMES.keys())
+
+    def items(self):
+        for c in _CAT_FILENAMES.keys():
+            yield (c, (MEMORY_FILE_MAP[c], MEMORY_KEY_NAMES.get(c, "items")))
+
+    def keys(self):
+        return _CAT_FILENAMES.keys()
+
+    def __len__(self):
+        return len(_CAT_FILENAMES)
+
+    def __contains__(self, category):
+        return category in _CAT_FILENAMES
 
 
 MEMORY_FILE_MAP = _LiveFileMap()

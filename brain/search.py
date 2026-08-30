@@ -10,10 +10,13 @@ FOLLOWUP_SEARCH_PHRASES = (
 def web_search(query):
     """Live Web Search - SIRF Google (browser).
     Provider: CDP Chrome scrape (free, no API key). Fail -> (None, None)."""
-    from musku_tools import web_search as gws
-    summary, results = gws.search(query)
-    if summary and results:
-        return summary, results
+    try:
+        from musku_tools import web_search as gws
+        summary, results = gws.search(query)
+        if summary and results:
+            return summary, results
+    except Exception as e:
+        print(f"[WebSearch disabled/missing]: {e}")
     return None, None
 
 def is_follow_up_search(brain, text):

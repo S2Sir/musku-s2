@@ -1,267 +1,268 @@
-# 🧠 MUSKU 2.0 — WEB CONVERSATIONAL AI MASTER ARCHITECTURE MANUAL
+# 🧠 MUSKU 2.0 — WEB CONVERSATIONAL AI : WORKING FLOW & STRUCTURE MANUAL
 
-> **Authoritative Specification:** This document provides the 100% complete, up-to-date architectural manual for **MUSKU 2.0** — a pure, production-grade **Web-based Conversational AI Female Assistant** (Realtime Voice + Text + Firebase Auth + Cloud Firestore + Cloud Run / Firebase Hosting deployment).
-
----
-
-## 📑 TABLE OF CONTENTS
-1. [Product Purpose & Strict Boundary](#1-product-purpose--strict-boundary)
-2. [Production Network & Deployment Architecture](#2-production-network--deployment-architecture)
-3. [Exhaustive Directory & File Map](#3-exhaustive-directory--file-map)
-4. [5-Authority Persona Engine](#4-5-authority-persona-engine)
-5. [Multi-User Identity & Cloud Firestore Storage Engine](#5-multi-user-identity--cloud-firestore-storage-engine)
-6. [Realtime Gemini Live Voice & Audio Engine](#6-realtime-gemini-live-voice--audio-engine)
-7. [Pure Conversational Intent Router & Safe Tools](#7-pure-conversational-intent-router--safe-tools)
-8. [Testing & Verification Suite](#8-testing--verification-suite)
+> **Workspace:** `D:\4\musku-2.0` | **Mode:** Browser-First Inline Live (`BROWSER_MIC_ENABLED=True`, `BROWSER_LIVE_WS=True`, `MUSKU_INLINE_LIVE=True`) | **Model:** `gemini-3.1-flash-live-preview` voice `Aoede` | **Generated:** 2026-08-29 scan (actual source code)
 
 ---
 
-## 1. PRODUCT PURPOSE & STRICT BOUNDARY
+## 1. WHAT MUSKU IS (PRODUCT BOUNDARY)
 
-MUSKU 2.0 is a **conversational AI female assistant** designed for talking with the user through voice and text.
+MUSKU 2.0 is a pure **Web Conversational AI Female Assistant** — realtime voice + text chat.
 
-### Core Capabilities
-- Realtime voice conversation with native 24kHz **`Aoede`** AI female voice.
-- Direct Web Audio playback and microphone 16kHz PCM streaming.
-- Realtime barge-in / speech interruption handling.
-- Text chat with deep conversation context and follow-up question solving.
-- 5-Authority Persona adaptation (Best Friend, Beti, Caring, Girlfriend, Jigri).
-- Multi-user data isolation via Firebase Authentication ID tokens.
-- Categorical long-term personal memory backed by Cloud Firestore.
+*   **Realtime voice** — Gemini Live native `AUDIO` 24kHz `Aoede` female voice (no local TTS).
+*   **Text chat** — `POST /api/chat` via `brain_core.py` + Gemini fallback.
+*   **Auth:** Firebase ID token (`firebase/auth.py` verify), per-uid Firestore isolation.
 
-### Absolute Security Boundary
-MUSKU 2.0 contains **ZERO computer control, desktop automation, or OS control capabilities**.
-- MUSKU CANNOT open, close, or switch applications.
-- MUSKU CANNOT control mouse, keyboard, or desktop windows.
-- MUSKU CANNOT execute local scripts, Python code, or File System Access API calls.
-- MUSKU CANNOT send or read WhatsApp messages or control desktop media keys.
-- MUSKU CANNOT alter Windows system volume or shutdown/restart the computer.
-
-If a user requests a PC control command (*"Chrome kholo"*, *"WhatsApp pe message bhejo"*, *"Volume badhao"*, *"Computer shutdown karo"*), Musku returns a polite conversational response:
-> *"Main aapka computer directly control nahi kar sakti, Boss. Main aapse baat karne, aapke sawaalon ke jawab dene aur baaten yaad rakhne ke liye yahan hoon."*
+**Security boundary:** `ZERO` computer/desktop/OS control. Any PC-control tool request → polite refusal `musku_live_session.py:_execute_tool` + `persona/identity_policy.py` feminine speech lock.
 
 ---
 
-## 2. PRODUCTION NETWORK & DEPLOYMENT ARCHITECTURE
+## 2. COMPLETE WORKING FLOW (END-TO-END)
 
 ```
-                           GITHUB REPOSITORY
-                                   │
-                 ┌─────────────────┴─────────────────┐
-                 ▼                                   ▼
-          Firebase Hosting                        Render
-           WEB FRONTEND                        PYTHON BACKEND
-          (Static Assets)                       (app.py WS/HTTP)
-                 │                                   │
-                 │                                   │
-                 │                              Python MUSKU
-                 │                                   │
-                 │                      ┌────────────┼────────────┐
-                 │                      ▼            ▼            ▼
-                 │                   Gemini       Firestore     Persona
-                 │                    Live          Memory       Engine
-                 │                      │            │            │
-                 └─────────────── Firebase Auth ─────┴────────────┘
+┌─────────────────────────── BROWSER (index.html + js/) ───────────────────────────┐
+│  Mic (getUserMedia 16k) ─▶ AudioContext 16k ─▶ resampleFloatTo16k ─▶ WS /live     │
+│  Speaker ◀── 24kHz PCM base64 ◀── WS /live   (muskuPlayPcm 24000Hz)               │
+│  Chat:  TYPE COMMAND #txtCmd ─▶ POST /api/chat ─▶ reply bubble                   │
+│  IndexedDB MUSKU_DB (local cache)                                                │
+└───────────────┬───────────────────────────────┬──────────────────────────────────┘
+                │ ws://host:8770/live            │ HTTPS GET static + POST /api/*
+                ▼                               ▼
+┌─────────────────────────── PYTHON BACKEND (app.py) ──────────────────────────────┐
+│  app.py:MuskuHTTPRequestHandler  /api/start, /api/chat, WSGI handler()           │
+│  live/browser_live_ws.py         1 session per verified uid (port 8770)          │
+│  live/musku_live_session.py      Gemini Live bridge (google-genai SDK)            │
+│  brain_core.py / brain/*         text chat + memory + persona                    │
+│  user_context.py / tenant_ctx.py per-uid config + ContextVar                     │
+│  firebase/*                      Auth verify + Firestore primary truth           │
+└───────┬───────────────────────────┬───────────────────────────┬──────────────────┘
+        ▼                           ▼                           ▼
+   Gemini Live API            Cloud Firestore              Local JSON fallback
+   (voice Aoede)              (users/{uid}/...)            (musku_chat / musku_data)
 ```
 
-### Endpoints & Secret Security Reference
-| Endpoint / Component | Type / Protocol | Security & Deployment Rule |
-| :--- | :--- | :--- |
-| **Firebase Hosting** | HTTPS (`https://<app>.web.app`) | Serves static Web UI (`index.html`, `auth.js`, stylesheets, avatars, IndexedDB cache) |
-| **Render Web Service** | HTTPS / WSS (`https://<render-url>`) | Runs Python backend (`app.py`, REST endpoints `/api/chat`, `/api/start`) |
-| **Render WebSocket** | WSS (`wss://<render-url>/live`) | High-speed 24kHz **`Aoede`** AI female voice bidirectional WebSocket |
-| **Firebase Auth** | Identity Token | Authenticates users; backend verifies token & extracts verified `uid` |
-| **Cloud Firestore** | NoSQL Database | Primary Source of Truth for per-`uid` personal memory, profile & chat history |
-| **`GEMINI_API_KEY`** | Render Environment Secret | **STRICT SERVER SECRET**: Injected via Render env vars (`os.getenv`). NEVER exposed to client. |
-| **`render.yaml`** | Render Blueprint | Render service definition file deploying Python backend from GitHub |
-
-> [!NOTE]
-> **Render Free Tier Note**: Render web services on the free tier sleep after periods of inactivity and re-awaken on incoming requests. This provides a 100% ₹0/no-card cost structure ideal for personal and small-scale deployment.
+### 2.1 Boot (`app.py:main`)
+1. `browser_live_ws.start()` → `/live` WS on `0.0.0.0:8770` (`live/voice_config.py:109`).
+2. `start_http_server()` → `index.html`, `ui_theme.css`, `img/` on `:8000` (`app.py:216`).
+3. `load_config()` crash-proof (`app.py:58`) — `00` corrupt → `[WARN]` + defaults + `.corrupt.bak`.
+4. Vercel WSGI `handler()` same `/api/chat` logic.
 
 ---
 
-## 3. EXHAUSTIVE DIRECTORY & FILE MAP
+## 3. GRID — `Greed/Grid` Actually is CSS Grid (No Business Logic)
+
+No `muku_greed` logic — term is **MUSKU + CSS Grid**.
+
+**Root:** `index.html:126`
+```css
+.app { display:grid; grid-template-columns:1fr 2fr 1fr; grid-template-rows:minmax(0,1fr); gap:10px; height:100vh; padding:14px; }
+.app > aside.panel LEFT | main.center.panel CENTER 2fr | aside.panel RIGHT
+```
+
+**DOM** `index.html:2079` `.app` → LEFT (gauges SYSTEM SOUND APPS #appList) → CENTER (title .stage 450px gif .eq 16 bars #startBtn) → RIGHT (avatar popover TYPE COMMAND #txtCmd LIVE CHAT #chatFeed)
+
+**Sub-grids:** `index.html:184` `.gauges {grid-template-columns:repeat(4,minmax(0,1fr))}` → SOUND/MIC/BRAIN/LEVEL gauges. `.panel, .sec.fill` flex.
+
+---
+
+## 4. START BUTTON — CLICK CHAIN (FULL)
+
+### 4.1 HTML + JS `index.html`
+*   Button `index.html:3080` `<button id="startBtn" class="btn">START</button>` `.btn.stop` green.
+*   Helpers `index.html:3153` `syncStartButton(active)` text `START↔STOP`, `setMicListeningState(on)` flag + `_muskuClearMicSendBuf`.
+*   **Browser path `index.html:7601 startAll()` (current, 4 fixes applied):**
+    1. `if(active) return` + `getKey()` check → `openApiKeyDirect()` if missing.
+    2. `setVoiceActive(true)` + `muskuResumeAudio()` (24kHz AudioContext resume).
+    3. `greet = greetingText()` (`:7587` time `Good morning/afternoon/evening/night dear`).
+    4. `setStatus("speaking")` + `ensureMuskuPending()` bubble + `muskuMicListening=true`.
+    5. **Mic separate:** `if(!muskuMicGranted && muskuRequestMic) muskuRequestMic().catch(()=>{})` fire-and-forget — **greeting not blocked**.
+    6. **HTTP backup queue:** `fetch("/api/start",{uid,greet,token, Authorization:Bearer})` → `app.py:116` queue.
+    7. **WS primary:** `connectLiveWs().then(()=> window.muskuLiveWs.send(JSON.stringify({text:"[INTERNAL - START GREETING: "+greet+"]"})))` (`:7728`). If WS fail, HTTP queue covers — no local TTS (authoritative Gemini).
+
+*   `stopAll()` `index.html:7644` → `active=false`, `muskuStopAudio()`, `speechSynthesis.cancel()`, `muskuLiveWs.close(1000)`, clear buffers, `syncStartButton(false)` `stopped`.
+*   Desktop header `index.html:5240` `#startBtn` pywebview handler — same mic-separate fix (no early `return`), else `pywebview.api.toggle()`.
+
+### 4.2 Python `/api/start` `app.py:115`
+```py
+body = json.loads(rfile.read(...))
+token = extract_token(headers, body); uid = resolve_verified_uid(token, body.uid)
+if uid is None: 401
+script = body.get("greet") or body.get("script")
+browser_live_ws.send_start_greeting(uid, script=script)  # line 138 force+queue
+return {"status":"ok"}
+```
+
+### 4.3 WS Server `live/browser_live_ws.py`
+*   `__init__:77` `_pending_greetings: dict uid->script|True` (script-preserving).
+*   `send_start_greeting(uid, script)` `160` — if `sess.active` → `sess.send_greeting(script, force=True)` direct, else `pending[uid]=script`.
+*   `_handler:285` extract `token/key/uid` query, `verify_firebase_token` → `vuid`, `resolve_verified_uid` 401.
+*   `_handler_inline_live:322` `set_uid(vuid)`, `load_config(vuid)`, one-session-per-uid `_sessions[ukey]`, `get_live_system_prompt(user_name, language, rel_mode, uid)` (`voice_config.py:304`), `MuskuLiveSession(ws, api_key, prompt, uid)`, flush: `pending = pop(ukey)` → `session._greet_on_connect=True; if str: session._pending_greeting=pending` `388`, then `session.run()`.
+
+---
+
+## 5. 🔔 GREETING MESSAGE — HOW IT ARRIVES (DETAILED, LATEST 4 FIXES)
+
+### 5.1 Diagram (GREETING ONLY)
+
+```
+START tap (index.html:7601)
+  ↓ getKey() ok → greet = greetingText() "Good morning dear"
+  ↓ setStatus speaking + ensureMuskuPending() + muskuResumeAudio() 24kHz
+  ↓ fork 1: fetch POST /api/start {uid,greet,token} ──┐
+  ↓ fork 2: connectLiveWs() -> WS OPEN ──┐             │
+                                         │             ▼
+                            live/browser_live_ws.py:160 send_start_greeting(uid, script)
+                                         │             ├─ if session.active → send_greeting(script, force=True)
+                                         │             └─ else pending[uid]=script (queue)
+                                         ▼
+Live WS Connected? YES → Gemini Live Session Ready? (musku_live_session.py:204)
+  ↓ YES                    ↓ NO (connecting_gemini)
+  ↓                        └─ queued → run():214 flush await send_greeting(pending, force=True)
+  ↓ YES → Fresh Greeting (force=True har tap, no dedupe block)
+  ↓ personal_profile.py:79 build_start_greeting_prompt(script)
+  │   base = script or get_respectful_start_greeting() 66 ("Good morning {dear/name}")
+  │   para = random 5 ("Aaj ka din pyaara ho dear!...", "Arey dear, awaz sunkar...")
+  │   => "Good morning dear. Aaj ka din pyaara ho dear! Batao aaj kya karna hai..."
+  ↓ live/musku_live_session.py:261 send_greeting(script, force=True)
+  │   if _greeted and not force: return (else force passes)
+  │   await send_proactive_prompt(prompt) 249 -> sess.send_realtime_input(text=prompt)
+  ↓ Gemini Live (gemini-3.1-flash-live-preview, voice Aoede, live/voice_config.py:22,381)
+  ↓ 24kHz PCM Audio (OUTPUT_SAMPLE_RATE 24000)
+  ↓ musku_live_session.py:411 _on_gemini inline_data -> b64 -> ws.send({"type":"audio", audio:b64}) 448
+  ↓ index.html:6744 onmessage audio -> muskuPlayPcm(b64) 6379 OUT_RATE 24000 -> AudioBuffer -> speaker
+  ↓ 🔊 Greeting Voice (real Aoede, no local TTS)
+```
+
+### 5.2 Files:Line for Greeting
+
+| Function | File:Line | Note |
+|---|---|---|
+| `greetingText()` | `index.html:7587` | time-based |
+| `build_start_greeting_prompt` | `personal_profile.py:79` | script + random para |
+| `send_greeting(force)` | `live/musku_live_session.py:261` | `force=True` fresh, queue if no session |
+| `send_start_greeting` | `live/browser_live_ws.py:160` | script-preserving |
+| `run()` flush | `live/musku_live_session.py:214` | `force=True` + clear |
+| `_on_browser` START GREETING | `live/musku_live_session.py:348` | `force=True` |
+| `app.py /api/start` | `app.py:115` | preserves `greet` |
+| `muskuPlayPcm` | `index.html:6379` | `OUT_RATE 24000` |
+| `_pending_greetings` | `live/browser_live_ws.py:77` | `uid->script` |
+
+### 5.3 4 Mandatory Fixes (Current, Applied 2026-08-29)
+
+1. **Har START → 1 fresh** `force=True` + reset `finally: _greeted=False` `musku_live_session.py:243`.
+2. **Gemini not ready → queue → auto send** `browser_live_ws.py:170` + `musku_live_session.py:214` + `index.html:7728` dual WS+HTTP.
+3. **Mic not blocking** `index.html:7601,5240` fire-and-forget, greeting `speaking` while mic `listening` later.
+4. **Existing pipeline same** `24kHz PCM WS muskuPlayPcm` no TTS, no grid/chat change.
+
+**Constraints honored:** Grid `1fr 2fr 1fr` no, chat `#chatFeed` no, mic mix no, local TTS no.
+
+---
+
+## 6. 🎙️ LIVE VOICE GENERATION (Shared with Greeting, Also for Voice-to-Voice)
+
+*Not greeting-only — same pipeline for ongoing voice chat.*
+
+**Config** `live/voice_config.py:22` `DEFAULT_MODEL gemini-3.1-flash-live-preview`, `27 INPUT 16000 mono`, `33 OUTPUT 24000`, `71 FRAME 1280 (40ms)`, `68 INSTANT_VOICE 1`, `109 WS 0.0.0.0:8770`, `381 VOICE Aoede` (config.json `musku_voice` > env).
+
+**Connect** `musku_live_session.py:66 build_musku_connect_config(system_prompt, language)` → `SpeechConfig(Aoede)` + `LiveConnectConfig(response_modalities=[AUDIO], system_instruction, tools, input/output transcription hi-IN)` → `client.aio.live.connect(model, config)` `202`, `status: connecting_gemini/connected/gemini_ready` `204`.
+
+**Loop:**
+*   Mic `index.html:6662` `getUserMedia echoCancellation` → `AudioContext 16000` → `resampleFloatTo16k 48k→16k` `6666` → `floatTo16` → `appendMicPcm` → `WS {audio:b64}` + `pywebview.api.on_browser_mic_chunk` meter `4642`.
+*   Server `musku_live_session.py:326` `_apply_mic_gain` + `Blob(mime="audio/pcm;rate=16000")` → `send_realtime_input(audio)`.
+*   Gemini `_on_gemini:411` `inline_data PCM b64` → `{audio}` → browser `AudioContext 24kHz` play (`muskuPlayPcm`), `output_transcription` bubble, `turnComplete` → `persist_and_sync`.
+
+**Tools:** `live_tools.py` `saveMemory` → `memory/store.py`, `searchWebInfo` → `brain/search.py`, PC-control → refusal. Sequential `send_tool_response`.
+
+**Persona live updates:** `update_system_prompt` `283` realtime inject, `detect_persona_mode` `369` relationship switch.
+
+**Voice-to-Voice vs Greeting isolation:** Greeting branch early `return` `348` before normal `audio 320` / `text 360` handling → ongoing voice unaffected.
+
+---
+
+## 7. 💬 TEXT CHAT FLOW (Separate from Live Voice)
+
+`index.html` `#txtCmd` → `app.py:143 POST /api/chat` `{text, uid, key}` → `resolve_verified_uid` 401 → `user_context.set_uid/load_config` per-uid → `MuskuBrain(user_name).get_response(text)` (`brain_core.py`) → if `Desktop control not active` fallback `_gemini_chat([{role:"system", prompt boss_instruction},{role:"user",text}], api_key)` → `{"reply": reply}` → browser `chatFeed` bubble. Also Vercel WSGI `handler:262` same. `rate_ok` 30/min `app.py:43`. Chat does **not** go through Live WS.
+
+---
+
+## 8. 💾 CHAT STORAGE (3-LAYER)
+
+**Layer1 Firestore PRIMARY** `firebase/firestore.py` `users/{uid}/profile, preferences, memory/{category}, reminders/{id}, conversations/{date}/turns/{auto}` `save_chat_turn_fs`. `firestore.rules` `request.auth.uid==userId`.
+
+**Layer2 Local JSON** `memory/chat.py:save_chat` → Firestore + `musku_chat/<date>.json` ring + `recent_turns.json` + `chat_summary.txt`. `memory/store.py` categorical.
+
+**Layer3 IndexedDB** `js/storage/db.js` `MUSKU_DB` stores `conversations, messages, memory, user_profile, persona_state`. `queue.js` P0-3, `backup.js` export.
+
+**Save trigger:** text `memory_bridge.py:110 save_chat_log` → `chat.save_chat`; voice `turn_complete` → `_persist_and_sync` `musku_live_session.py:596` → same `save_chat_log` → `{memory_sync}` to UI. `voice_config.get_live_memory_block:230` builds prompt memory (turn_context + store + recent 10 + summary + last_question PREVIOUS-REPLY RULE).
+
+---
+
+## 9. MULTI-TENANT ISOLATION
+
+`auth_verify.py` `extract_token/resolve_verified_uid`, `tenant_ctx.py` ContextVar `uid`, `user_context.py` per-uid `load_config/set_uid/ensure_user_dir`, `memory/paths.py` uid-aware paths. `to_thread` re-establish `set_uid(uid)` in `_persist_turn_and_consolidate:606`.
+
+Runtime per-uid: `turn_context.py`, `conversation.py`, `emotion.py`, `store.py`, `chat.py`, `browser_live_ws/musku_live_session` per-uid session.
+
+---
+
+## 10. DIRECTORY MAP (ACTUAL 2026-08-29)
 
 ```
 musku-2.0/
-├── app.py                      # 🚀 HTTP REST Server & Realtime Live Voice WS Entrypoint
-├── brain_core.py               # 🧠 Primary MuskuBrain Engine, LLM Chat & Conversational Refusal Guard
-├── auth_verify.py              # 🔐 Public-Key Firebase ID Token Signature Verification
-├── personal_profile.py         # 🪪 Persona Facade & Time-Based Greeting Pools
-├── user_context.py             # 👥 Multi-tenant Manager (Per-user Data Paths & Configurations)
-├── tenant_ctx.py               # 🧵 ContextVar context manager holding active request user ID
-├── language_policy.py          # 🌐 Language Normalizer (Hinglish / Hindi / English) & Prompt Locks
-├── config.json                 # ⚙️ Non-secret configuration defaults (voice selection, gain, language)
-├── Dockerfile                  # 📦 Docker container definition for Cloud Run deployment
-├── firebase.json               # 🔥 Firebase Hosting configuration & Cloud Run rewrites
-├── requirements-server.txt     # 📦 Minimal server production dependencies
-├── MUSKU_WEB_ARCHITECTURE.md   # 📖 This Master Architecture Reference Manual
-│
-├── firebase/                   # 🔥 FIREBASE AUTH & CLOUD FIRESTORE INTEGRATION
-│   ├── __init__.py             #   Package exports
-│   ├── auth.py                 #   Firebase Admin Auth token verification & UID extraction
-│   └── firestore.py            #   Cloud Firestore user data hierarchy persistence
-│
-├── persona/                    # 🎭 5-AUTHORITY PERSONA ENGINE (Immutable Identity & Adaptability)
-│   ├── __init__.py             #   Public API exports for persona composition
-│   ├── identity_policy.py      #   IMMUTABLE LOCK: Name="Musku", Female identity, Creator="S2 Sir"
-│   ├── core_personality.py     #   Baseline traits: Intelligent, warm, confident, proactive
-│   ├── relationship_engine.py  #   5 Modes: best_friend, jigri, beti, caring, girlfriend
-│   ├── address_system.py       #   Dynamic Titles: Boss, Sir, Bestie, Bro, Jaan, Mamu
-│   ├── tone_engine.py          #   Situational Tones: Focused, supportive, celebratory, empathetic
-│   ├── persona_composer.py     #   Deterministic System Prompt Builder (Single Source of Truth)
-│   ├── persona_cache.py        #   SHA-256 caching for built system prompts
-│   ├── persona_versioning.py   #   Hash & version tracking metadata
-│   ├── drift_guard.py          #   Guard against prompt-injection identity drift
-│   └── name_resolver.py        #   User real-name extraction & persistence ("mujhe X bulao")
-│
-├── brain/                      # 🧩 BRAIN SUB-PACKAGE (LLM & Conversational Intent Routers)
-│   ├── __init__.py             #   Package exports for brain components
-│   ├── llm.py                  #   Gemini client with rate-limit RPM throttle (acquire_gemini_slot)
-│   ├── memory_bridge.py        #   save_chat_log, auto_extract_and_learn, background consolidation
-│   ├── conversation.py         #   In-memory conversation state & active topics
-│   ├── emotion.py              #   detect_emotion, mood tracking & emotional state save
-│   ├── router.py               #   Pure Conversational Intent Router (classify_conversational_intent)
-│   ├── search.py               #   Google CSE web search & follow-up query solver
-│   └── response.py             #   finalize_reply: Female grammar fixes, devanagari/hinglish fixes
-│
-├── memory/                     # 💾 LOCAL-FIRST & FIRESTORE MEMORY ENGINE
-│   ├── __init__.py             #   Package exports for memory store
-│   ├── paths.py                #   Single source of truth for file paths (uid-aware isolation)
-│   ├── store.py                #   Categorical long-term memory (relations, preferences, tasks, reminders)
-│   ├── chat.py                 #   Per-date JSON chat logs (musku_chat/<date>.json)
-│   ├── context_builder.py      #   Constructs memory context blocks for LLM system prompts
-│   ├── last_question.py        #   Follow-up solver ("ha batao / aage batao" continuation)
-│   ├── turn_context.py         #   Learning streak and turn evaluation context
-│   └── consolidate.py          #   Periodic consolidation of conversation turns into long-term facts
-│
-├── live/                       # 🎙️ REALTIME GEMINI LIVE VOICE & SAFE CONVERSATIONAL TOOLS
-│   ├── __init__.py             #   Package init
-│   ├── browser_live_ws.py      #   WebSocket server handler on /live
-│   ├── musku_live_session.py   #   Per-client Gemini Live session manager (PCM input/output, tools, transcripts)
-│   ├── voice_config.py         #   Voice parameters, models (gemini-3.1-flash-live-preview), Aoede voice
-│   ├── live_tools.py           #   FunctionDeclarations & safe routes (saveMemory, searchWebInfo)
-│   ├── search_policy.py        #   Policy for explicit web search vs knowledge answers
-│   ├── search_hook.py          #   Instant search injection hook
-│   ├── instant_search.py       #   Google instant search helper (returns information, no OS execution)
-│   ├── barge_in.py             #   Barge-in detection when user interrupts Musku speaking
-│   ├── browser_mic_bridge.py   #   Browser mic PCM 16kHz forwarder + adaptive auto-gain
-│   ├── browser_audio_bridge.py #   Browser speaker bridge stub
-│   ├── display_filter.py       #   live_display_text: Normalizes Musku display text for UI
-│   ├── mic_meter.py            #   PCM RMS calculator for UI neural meter gauge
-│   ├── voice_router.py         #   Voice routing state switch
-│   └── streak_praise.py        #   Generates praise on user learning streaks
-│
-├── js/                         # 🌐 FRONTEND INDEXEDDB CLIENT OFFLINE CACHE
-│   ├── storage/
-│   │   ├── db.js               #   IndexedDB MUSKU_DB (conversations, messages, memory, profile)
-│   │   ├── queue.js            #   Priority write queue (P0..P3) executed on requestIdleCallback
-│   │   └── backup.js           #   Versioned backup export/import (MUSKU_BACKUP v1)
-│   └── tests/                  #   Browser storage test runner & test suites
-│
-├── img/                        # 🖼️ Avatars & Talking-Face GIFs (Normal, Hello, Talking1-3)
-├── tests/                      # 🐍 Python unit test suite (`test_persona_engine.py`, etc.)
-└── index.html                  # 🎨 3D Web Dashboard UI
+├── app.py                 # HTTP :8000 + /live :8770 + /api/chat, /api/start + crash-proof load_config
+├── index.html             # 3-col grid + #startBtn + muskuPlayPcm 24k + startAll dual greeting
+├── personal_profile.py    # get_respectful_start_greeting 66, build_start_greeting_prompt 79
+├── user_context.py        # per-uid config (atomic _write_json) + persona switch
+├── tenant_ctx.py, auth_verify.py, language_policy.py, crypto_utils.py
+├── config.json            # musku_voice Aoede, gain 2.4, language hinglish (encrypted key)
+├── firebase/auth.py, firestore.py, firestore.rules
+├── persona/               # identity, core_personality, relationship, address, tone, composer...
+├── brain/ llm.py, memory_bridge.py, conversation.py, emotion.py, router.py, search.py, response.py
+├── brain_core.py          # MuskuBrain + _gemini_chat fallback
+├── memory/ paths.py, store.py, chat.py, turn_context.py, last_question.py, consolidate.py, context_builder.py
+├── live/ browser_live_ws.py (force+queue 160), musku_live_session.py (force 261, flush 214), voice_config.py (single source), live_tools.py, mic_meter.py, display_filter.py, browser_mic/audio_bridge.py
+├── js/storage/ db.js, queue.js, backup.js, historyService.js + tests/
+├── img/1..6/, musku_chat/, musku_data/, musku_users/{uid}/
+├── tests/ + MUSKU_WEB_ARCHITECTURE.md (this file)
 ```
 
 ---
 
-## 4. 5-AUTHORITY PERSONA ENGINE
+## 11. CONFIG KNOBS (`live/voice_config.py` + `config.json`)
 
-Musku's identity is constructed by the `persona/` engine using 5 distinct authorities:
-
-1. **Identity Policy (`identity_policy.py`) [IMMUTABLE]**:
-   - **Name**: Musku (Female AI Assistant).
-   - **Creator**: Designed by **S2 Sir**.
-   - **Grammar Lock**: Female self-speech forms (`karti hoon`, `gayi`, `samajh gayi`, `bolti hoon`, `sun rahi hoon`).
-2. **Core Personality (`core_personality.py`)**:
-   - Intelligent, warm, witty, confident, highly capable, proactive.
-3. **Relationship Engine (`relationship_engine.py`)**:
-   - **Best Friend** (Default), **Jigri Dost**, **Beti**, **Caring Companion**, **Girlfriend**.
-4. **Address System (`address_system.py`)**:
-   - Dynamic user titles: **Boss** (Default), **Sir**, **Bestie**, **Bro**, **Jaan**, **Mamu**, or user's real name.
-5. **Tone Engine (`tone_engine.py`)**:
-   - Runtime adaptation to user mood (focused, stressed, celebratory, serious, empathetic).
+| Key | Default | Meaning |
+|---|---|---|
+| `GEMINI_LIVE_MODEL` | `gemini-3.1-flash-live-preview` | Live model |
+| `GEMINI_LIVE_VOICE` / `musku_voice` | `Aoede` | Female voice (VOICES: Kore,Leda,Orus,Zephyr,Puck,Charon,Fenrir,Aoede) |
+| `BROWSER_LIVE_WS_PORT` | `8770` | /live WS port |
+| `INPUT_SAMPLE_RATE` | `16000` | Mic → Gemini |
+| `OUTPUT_SAMPLE_RATE` | `24000` | Gemini → speaker |
+| `FRAME_BYTES` | `1280` | 40ms @16k |
+| `INSTANT_VOICE_MODE` | `1` | low latency buffers |
+| `JS_MIC_GAIN` / `MIC_INPUT_GAIN` | `3.0 / 1.0` | mic boost |
+| `musku_voice_gain` | `2.4` | speaker gain |
+| `MUSKU_LIVE_TOOLS` | `1` | saveMemory/search |
+| `USER_IDLE_CHECKIN_SECS` | `60` | proactive check-in |
 
 ---
 
-## 5. MULTI-USER IDENTITY & CLOUD FIRESTORE STORAGE ENGINE
+## 12. HOW TO RUN
 
-### Authenticated Identity (`firebase/auth.py`)
-- User token verified via `firebase_admin.auth.verify_id_token`.
-- Authoritative `uid` extracted from token and set in `tenant_ctx.set_uid(uid)`.
-
-### Cloud Firestore Hierarchy (`firebase/firestore.py`) — PRIMARY SOURCE OF TRUTH
-- `users/{uid}/profile/main`: User profile, title, relationship mode, language.
-- `users/{uid}/preferences/main`: Likes, dislikes, habits, tech stack.
-- `users/{uid}/memory/main`: Relations, tasks, long-term facts.
-- `users/{uid}/reminders/{id}`: Scheduled alarms & due-time reminders.
-- `users/{uid}/conversations/{date}`: Session metadata.
-- `users/{uid}/messages/{id}`: Chat transcript messages.
-
-> [!NOTE]
-> **Persistence Hierarchy**: Cloud Firestore is the **Authoritative Source of Truth** for all user memories, profile, and chat logs across devices. IndexedDB (`MUSKU_DB`) acts purely as an **Optional Local Client Cache** for offline performance. Local server JSON files are kept only for local development fallbacks.
-
-### Strict Multi-Tenant Security Rules (`firestore.rules`)
-```protobuf
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
+```bash
+cd musku-2.0
+pip install -r requirements-server.txt
+python app.py            # http://localhost:8000 + ws://localhost:8770/live
 ```
-- **Cross-Tenant Guard**: User A (`UID_A`) can NEVER read or write User B's (`UID_B`) data.
-- **Device Sync**: Logging in from any new device (mobile/desktop) with the same Firebase credentials automatically rehydrates the user's personal Musku profile, memories, and chat history.
+Text-only Vercel via `app.py:handler`. `config.json` crash-proof + atomic write.
 
 ---
 
-## 6. REALTIME GEMINI LIVE VOICE & AUDIO ENGINE
+## 13. TESTING
 
-- **Microphone Streaming**: Browser captures 16kHz 16-bit mono PCM via Web Audio API worklet.
-- **WebSocket Gateway**: High-speed bidirectional stream to Cloud Run `/live` WebSocket.
-- **Gemini Live Engine**: Gemini model `gemini-3.1-flash-live-preview` streams native 24kHz **`Aoede`** AI female voice.
-- **Web Audio Resampler**: Resamples 24kHz PCM to hardware clock (44.1kHz / 48kHz) dynamically with zero playback drops.
-- **Barge-in Interruption**: Realtime speech detection in `barge_in.py`; instantly mutes playback when user interrupts Musku speaking.
-
----
-
-## 7. PURE CONVERSATIONAL INTENT ROUTER & SAFE TOOLS
-
-### Conversational Intent Router (`brain/router.py`)
-Classifies user text into purely conversational intents:
-- `greeting`: Hello / Good morning / Namaste
-- `question`: Inquiry / direct questions
-- `explanation`: Requests for details or help
-- `follow_up`: Continuation prompts (*"haan aage batao"*)
-- `memory_query`: Queries about saved user facts or profile
-- `emotional_chat`: Mood, feelings, companion banter
-- `web_search`: Knowledge search queries
-- `conversation`: General dialogue
-
-### Safe Function Declarations (`live/live_tools.py`)
-- `saveMemory`: Persists long-term user facts and preferences to Cloud Firestore.
-- `searchWebInfo`: Performs safe Google web search to retrieve information summaries.
-
----
-
-## 8. TESTING & VERIFICATION SUITE
-
-### Python Unit Test Suite
 ```bash
 python -m unittest discover -s tests
-```
-- **Status**: **PASSED** (35/35 tests passed in 0.157s).
-
-### Frontend Storage Test Suite
-```bash
 node js/tests/runner.js
+python -c "import live.voice_config as c; assert c.OUTPUT_SAMPLE_RATE==24000; assert c.INPUT_SAMPLE_RATE==16000"
+python -c "from live.musku_live_session import MuskuLiveSession; assert 'force' in MuskuLiveSession.send_greeting.__code__.co_varnames"
 ```
-- **Status**: **PASSED** (13/13 tests passed).
-
+Greeting manual: `START` → WS `{"text":"[INTERNAL - START GREETING: Good morning dear]"}` → log `Gemini connected` → WS `{"type":"audio"}` → Aoede 24kHz. `STOP->START` 3x fresh para, mic denied still greeting.
 

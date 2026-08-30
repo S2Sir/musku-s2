@@ -1,7 +1,9 @@
 import time
 import json
+import os
 from datetime import datetime
-from memory.paths import LOCK as FILE_LOCK
+from memory import paths
+from tenant_ctx import safe_uid, get_uid
 
 EMOTION_LEXICON = {
     "happy": [
@@ -60,10 +62,10 @@ EMOTION_LEXICON = {
 }
 
 EMOTION_GUIDANCE = {
-    "happy": "User khush hai - unki khushi me share karo, unke saath celebrate karo, energy aur positivity match karo.",
+    "happy": "User khush hai - unki khushi me share karo, unke saath celebrate karo, energy aur positivity match karo. Halki hasi-majak (haha/hehe) allowed.",
     "sad": "User udaas / dil toota feel kar raha hai - SABSE PEHLE unki feeling ko soft, caring tone me acknowledge karo (jaise 'Ye sunke dil bhar aaya...'), phir dhaansa do aur sath do. Kabhi dismiss ya 'itna mat socho' mat bolo.",
     "angry": "User gusse / naaraz hai - shant, samajhdar tone me baat karo. Pehle unki baat pura suno, unki side lo, phir halka reassurance do. Gussa kam karne me madad karo.",
-    "excited": "User bahut excited hai - unki energy ko full match karo aur saath me maza karo.",
+    "excited": "User bahut excited hai - unki energy ko full match karo aur saath me maza karo. Halki hasi-majak allowed.",
     "lonely": "User akelepan (lonely) feel kar raha hai - warmth aur presence do, unhe special aur cared feel karwao, unse baat karte raho.",
     "grateful": "User grateful hai - warm, sweet, aur welcoming response do. Unhe batao ki unka sath bhi utna hi special hai.",
     "anxious": "User pareshan/tension me hai - calm, reassuring aur grounding tone use karo. Practical saath do aur overthink karne se bachao.",
@@ -88,11 +90,41 @@ def detect_emotion(user_text):
         intensity = min(1.0, intensity + 0.2)
     return best, intensity, matched
 
-def save_mood(brain, user_text, emotion, intensity):
-    """Track user mood over time (last 30 moods) in the profile."""
-    from memory import store as _mstore
-    with FILE_LOCK:
-        profile = _mstore.load_profile()
+def _profile_file(uid=None):
+    return paths.PROFILE_FILE if uid is None else paths._data_dir(uid) and os.path.join(paths._data_dir(uid), "user_profile.json")
+
+
+def _load_profile(uid=None):
+    """Per-user profile load (fail-safe)."""
+    try:
+        pf = _profile_file(uid)
+        if pf and os.path.exists(pf):
+            with open(pf, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
+
+
+def _save_profile(profile, uid=None):
+    """Per-user profile save (fail-safe)."""
+    try:
+        pf = _profile_file(uid)
+        if pf:
+            os.makedirs(os.path.dirname(pf), exist_ok=True)
+            with open(pf, "w", encoding="utf-8") as f:
+                json.dump(profile, f, indent=4, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def save_mood(brain, user_text, emotion, intensity, uid=None):
+    """Track user mood over time (last 30 moods) — PER-USER scoped profile."""
+    u = safe_uid(uid if uid is not None else get_uid())
+    with paths.LOCK:
+        profile = _load_profile(u)
         history = profile.get("mood_history", [])
         history.append(
             {
@@ -106,14 +138,14 @@ def save_mood(brain, user_text, emotion, intensity):
         if len(history) > 30:
             history = history[-30:]
         profile["mood_history"] = history
-        _mstore.save_profile(profile)
+        _save_profile(profile, u)
 
-def get_user_mood(brain):
-    """Return (current_emotion, recent_trend) from mood_history."""
-    from memory import store as _mstore
+def get_user_mood(brain, uid=None):
+    """Return (current_emotion, recent_trend) from mood_history — PER-USER scoped."""
+    u = safe_uid(uid if uid is not None else get_uid())
     moods = []
-    with FILE_LOCK:
-        prof = _mstore.load_profile()
+    with paths.LOCK:
+        prof = _load_profile(u)
         moods = prof.get("mood_history", [])
     
     if not moods:

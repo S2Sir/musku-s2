@@ -1,23 +1,20 @@
-# Python
+# Musku Docker ignore — never ship secrets/logs/cache
 __pycache__/
-*.py[cod]
-*$py.class
 .pytest_cache/
-*.env
-
-# Local Musku User & Memory data
+.git/
+.gitignore
 musku_chat/
 musku_data/
 musku_users/
-# Secrets — never commit (rotate if already committed!)
 config.json
 config.json.corrupt.bak
 debug_greeting.log
 server.log
 server_err.log
 musku_live_session.log
-
-# OS / IDE
-.DS_Store
-.vscode/
-.idea/
+check_*.py
+chat_summary.txt
+tests/
+.vercel/
+*.log
+.mypy_cache/

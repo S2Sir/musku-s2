@@ -10,35 +10,33 @@ from . import paths
 
 
 def save_chat(date_str, entry):
-    """Entry ko Cloud Firestore me save karta hai (Primary Source of Truth) + local JSON fallback."""
-    user_said = entry.get("user_said") or entry.get("user") or ""
-    musku_replied = entry.get("musku_replied") or entry.get("musku") or ""
-
-    # Primary: Cloud Firestore persistence for authenticated UID
+    """Hybrid: Server keeps recent_turns ring + per-uid daily JSON for real-human recall.
+    Browser IndexedDB is primary UI history, but server daily files enable "last time" recall across sessions/devices.
+    """
+    # 1) Always update recent_turns ring (20 turns)
     try:
-        from tenant_ctx import get_uid
-        from firebase.firestore import save_chat_turn_fs
-        uid = get_uid()
-        if uid and user_said:
-            save_chat_turn_fs(uid, date_str, user_said, musku_replied, meta={"time": entry.get("time", "")})
-    except Exception as fe:
-        print(f"[Firestore Chat Save Error]: {fe}")
-
-    # Fallback: local JSON file
+        _update_recent_turns_locked(entry, date_str)
+    except Exception as e:
+        print(f"[Recent Turns Save Error]: {e}")
+    # 2) Also persist to daily file for long-term recall (30 days window)
     try:
         os.makedirs(paths.HISTORY_DIR, exist_ok=True)
-        file_path = os.path.join(paths.HISTORY_DIR, f"{date_str}.json")
-        with paths.LOCK:
-            history = []
-            if os.path.exists(file_path):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    history = json.load(f)
-            history.append(entry)
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(history, f, indent=4, ensure_ascii=False)
-            _update_recent_turns_locked(entry, date_str)
+        fp = os.path.join(paths.HISTORY_DIR, f"{date_str}.json")
+        lst = []
+        if os.path.exists(fp):
+            with open(fp, "r", encoding="utf-8") as f:
+                lst = json.load(f) or []
+        # dedup same second duplicate
+        if lst and lst[-1].get("user_said") == entry.get("user_said") and lst[-1].get("musku_replied") == entry.get("musku_replied"):
+            pass
+        else:
+            lst.append(dict(entry))
+            # cap per-day to 200 to avoid bloating
+            lst = lst[-200:]
+            with open(fp, "w", encoding="utf-8") as f:
+                json.dump(lst, f, indent=2, ensure_ascii=False)
     except Exception as e:
-        print(f"[History Save Error]: {e}")
+        print(f"[Daily History Save Error]: {e}")
     finally:
         paths.RECENT_CONTEXT_CACHE.pop(datetime.now().strftime("%Y-%m-%d"), None)
 
@@ -177,7 +175,7 @@ def list_dates(limit=14):
 
 
 def is_history_question(user_text):
-    """User purani date / kaam ke baare me poochh raha hai ya nahi."""
+    """User purani date / kaam ke baare me poochh raha hai ya nahi — real human recall trigger."""
     text = (user_text or "").lower()
     q_markers = [
         "kya kiya", "kya kiya tha", "kya hua", "kya hua tha", "kya chala",
@@ -189,8 +187,46 @@ def is_history_question(user_text):
         "abhi kya", "kya kar rahe", "kya kar rhe", "kya kar raha", "kya kar rahi",
         "pehle kya", "recent", "continue karo", "wahi kaam", "last wala",
         "hum kya kar", "humne kya", "maine kya", "aapne kya",
+        "last time hum", "pichli baar", "pichhali baar", "kal kya", "kal humne",
+        "yaad hai", "yaad h", "remember",
     ]
     return any(m in text for m in q_markers)
+
+
+def get_history_recall_block(user_text, max_entries=8):
+    """Real-human recall: search local store for relevant history when user asks 'last time'."""
+    try:
+        if not is_history_question(user_text):
+            return ""
+        # 1) Try to collect recent history window (30) for context
+        entries = load_last_n_entries(n=paths.HISTORY_RECALL_WINDOW)
+        if not entries:
+            entries = load_recent_turns_ring()
+        if not entries:
+            return ""
+        # Simple relevance: if last_time etc, return last 6 turns summary
+        # If contains keyword, filter
+        low = (user_text or "").lower()
+        keywords = [w for w in re.findall(r"[a-z\u0900-\u097F]{3,}", low) if w not in ("kya","hai","tha","thi","hum","aap","bata","yaad","last","time","pichli","baat")]
+        filtered = []
+        if keywords:
+            for e in entries:
+                combined = (e.get("user_said","") + " " + e.get("musku_replied","")).lower()
+                if any(k in combined for k in keywords[:4]):
+                    filtered.append(e)
+        # Prefer filtered if found, else last entries
+        use = filtered[-max_entries:] if len(filtered) >= 2 else entries[-max_entries:]
+        if not use:
+            return ""
+        lines = []
+        for e in use:
+            d = e.get("date","")
+            lines.append(f"[{d}] User: {e.get('user_said','')}")
+            lines.append(f"[{d}] Musku: {e.get('musku_replied','')}")
+        block = "\n".join(lines)
+        return f"LOCAL HISTORY RECALL (real human memory — last {len(use)} turns from local store):\n{block}\n— Use this to answer 'last time hum kya baat kar rahe the' naturally, jaise ek real human yaad karta hai."
+    except Exception:
+        return ""
 
 
 def resolve_date_query(user_text):

@@ -159,12 +159,12 @@ def parse_search_voice_brief(summary: str, highlights: list | None = None) -> st
             return "\n".join(f"- {ln}" for ln in lines)
 
     cleaned = re.sub(
-        r"Boss, maine Google pe '[^']+' search kar diya\.?\s*",
+        r"(Boss,|Haan,)\s*maine Google pe '[^']+' search kar diya\.?\s*",
         "",
         text,
         flags=re.I,
     )
-    cleaned = re.sub(r"Ab awaaz se boss ko.*", "", cleaned, flags=re.I).strip()
+    cleaned = re.sub(r"Ab awaaz se.*", "", cleaned, flags=re.I).strip()
     cleaned = prepare_voice_text(cleaned, lang)
     return cleaned[:900] if cleaned else prepare_voice_text(text[:400], lang)
 
@@ -321,21 +321,21 @@ def format_spoken_search_reply(query: str, voice_brief: str) -> str:
     if not facts:
         if lang == "english":
             return (
-                f"Boss, I searched Google for {q}. "
+                f"I searched Google for {q}. "
                 "The browser has the results open for you."
             )
         if lang == "hindi":
             return (
-                f"बॉस, मैंने Google पर {q} खोज लिया है। "
+                f"मैंने Google पर {q} खोज लिया है। "
                 "ब्राउज़र में नतीजे खुल गए हैं।"
             )
         return (
-            f"Boss, maine Google pe {q} search kar liya hai. "
+            f"Maine Google pe {q} search kar liya hai. "
             "Browser me results khul gaye hain, aap dekh sakte hain."
         )
 
     if lang == "english":
-        intro = f"Yes boss, I searched Google for {q}."
+        intro = f"Yes, I searched Google for {q}."
         main = facts[0].rstrip(".")
         if len(facts) >= 2:
             extra = facts[1].rstrip(".")
@@ -343,14 +343,14 @@ def format_spoken_search_reply(query: str, voice_brief: str) -> str:
         return f"{intro} Here's what I found — {main}."
 
     if lang == "hindi":
-        intro = f"हाँ बॉस, मैंने {q} के बारे में Google पर खोज की।"
+        intro = f"हाँ, मैंने {q} के बारे में Google पर खोज की।"
         main = facts[0].rstrip("।.")
         if len(facts) >= 2:
             extra = facts[1].rstrip("।.")
             return f"{intro} मुझे यह मिला — {main}। और एक और बात — {extra}।"
         return f"{intro} मुझे यह मिला — {main}।"
 
-    intro = f"Haan boss, maine {q} ke baare me Google pe search kar liya."
+    intro = f"Haan, maine {q} ke baare me Google pe search kar liya."
     main = facts[0].rstrip(".")
     if len(facts) >= 2:
         extra = facts[1].rstrip(".")

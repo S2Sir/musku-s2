@@ -7,6 +7,7 @@ from .relationship_engine import get_relationship_profile
 from .address_system import format_user_address
 from .persona_cache import persona_cache
 from .drift_guard import validate_compiled_persona
+from .abuse_policy import POLITE_BOUNDARY_BLOCK
 
 
 def build_persona_prompt(
@@ -45,6 +46,8 @@ def build_persona_prompt(
 
 {MUSKU_IDENTITY_LOCK.strip()}
 
+{POLITE_BOUNDARY_BLOCK.strip()}
+
 {CORE_PERSONALITY_TRAITS.strip()}
 
 {rel_profile["instruction"].strip()}
@@ -57,7 +60,7 @@ Answer user requests accurately, naturally, and warmly in your active character 
 
     if not validate_compiled_persona(prompt):
         # Fallback safe assembly
-        prompt = f"You are MUSKU — a girl, personal AI assistant.\n{MUSKU_IDENTITY_LOCK.strip()}"
+        prompt = f"You are MUSKU — a girl, personal AI assistant.\n{MUSKU_IDENTITY_LOCK.strip()}\n\n{POLITE_BOUNDARY_BLOCK.strip()}"
 
     persona_cache.set(name, title, rel_mode, lang, prompt)
     return prompt

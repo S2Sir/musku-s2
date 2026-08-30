@@ -31,7 +31,7 @@ def _ensure_firebase_app():
         _firebase_app_initialized = True
         logger.info("Firebase Admin SDK initialized successfully.")
     except Exception as e:
-        logger.warning("Firebase Admin SDK initialization deferred/bypassed: %s", e)
+        logger.debug("Firebase Admin SDK initialization deferred/bypassed: %s", e)
 
 
 def verify_firebase_token(token: Optional[str], fallback_uid: Optional[str] = None) -> str:
@@ -60,7 +60,7 @@ def verify_firebase_token(token: Optional[str], fallback_uid: Optional[str] = No
             logger.debug("Verified Firebase Token for UID: %s", uid)
             return uid.strip()
     except Exception as e:
-        logger.warning("Firebase token verification failed (%s); using fallback UID: %s", e, safe_fallback)
+        logger.debug("Firebase token verification failed (%s); using fallback UID: %s", e, safe_fallback)
 
     return safe_fallback
 

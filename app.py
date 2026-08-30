@@ -9,11 +9,15 @@ from __future__ import annotations
 import asyncio
 import http.server
 import json
+import mimetypes
 import os
 import socketserver
 import sys
 import threading
 import time
+
+# SECURITY: Fail-closed — prod requires auth. Local dev set REQUIRE_AUTH=false explicitly.
+os.environ.setdefault("REQUIRE_AUTH", "true")
 
 # Ensure musku-2.0 and parent workspace directory are in sys.path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +33,35 @@ from brain_core import MuskuBrain
 
 PORT = int(os.environ.get("PORT", 8000))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+
+# Security: request limits
+MAX_API_BODY = 20 * 1024  # 20KB for /api/*
+MAX_CHAT_TEXT = 2000
+BLOCKED_STATIC = {"config.json", ".env", "crypto_utils.py", "musku_data", "musku_users", "musku_chat", ".git", "debug_greeting.log", "server.log", "server_err.log"}
+ALLOWED_STATIC_PREFIXES = ("/img/", "/js/", "/ui_theme.css", "/auth.js", "/auth.css", "/index.html", "/", "/favicon.ico", "/how-to-use.html", "/activate.html", "/admin.html", "/signup.html")
+
+# CORS allowlist (comma-separated env). Empty => deny except same-origin. Use * only for local dev if explicitly set.
+def _allowed_origins():
+    raw = os.environ.get("ALLOWED_ORIGIN", "")
+    if raw.strip() == "*":
+        return None  # wildcard explicit
+    if not raw.strip():
+        return {"https://musku-ai.web.app", "https://musku-ai.firebaseapp.com", "http://localhost:8000", "http://127.0.0.1:8000"}
+    return {o.strip() for o in raw.split(",") if o.strip()}
+
+def _cors_origin(request_origin: str) -> str:
+    allowed = _allowed_origins()
+    if allowed is None:
+        return "*"
+    if request_origin and request_origin in allowed:
+        return request_origin
+    # Vercel preview/prod: allow any *.vercel.app (deployment URLs vary)
+    if request_origin and request_origin.endswith(".vercel.app"):
+        return request_origin
+    # no Origin header (same-origin fetch / curl) => allow
+    if not request_origin:
+        return next(iter(allowed)) if allowed else "*"
+    return ""  # not allowed => empty (caller will not set header or will deny)
 
 # Per-uid rate limiter (lightweight, in-memory). Full distributed limiter = Phase 5.
 _RATE = {}
@@ -53,11 +86,32 @@ def _rate_ok(uid: str) -> bool:
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if data.get("gemini_api_key"):
-            data["gemini_api_key"] = data["gemini_api_key"].strip()
-        return data
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                raw = f.read()
+            # null-byte / empty file = corrupt (911x 0x00 jaisa case)
+            if not raw or not raw.strip() or not raw.strip("\x00").strip():
+                raise ValueError("empty or null-byte config")
+            data = json.loads(raw)
+            if data.get("gemini_api_key"):
+                try:
+                    from crypto_utils import decrypt_value
+                    data["gemini_api_key"] = decrypt_value(data["gemini_api_key"])
+                except Exception:
+                    data["gemini_api_key"] = data["gemini_api_key"].strip()
+            return data
+        except Exception as e:
+            print(f"[WARN] config.json corrupt/invalid ({e}) - using defaults. File: {CONFIG_FILE}")
+            # backup corrupt file so restore possible, then continue with defaults
+            try:
+                corrupt_backup = CONFIG_FILE + ".corrupt.bak"
+                if os.path.getsize(CONFIG_FILE) > 0:
+                    import shutil
+                    shutil.copy2(CONFIG_FILE, corrupt_backup)
+                    print(f"   -> corrupt backup saved to {corrupt_backup}")
+            except Exception:
+                pass
+            return {"user_name": "S2", "language": "hinglish"}
     return {"user_name": "S2", "language": "hinglish"}
 
 
@@ -68,13 +122,20 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=BASE_DIR, **kwargs)
 
     def end_headers(self):
-        origin = os.environ.get("ALLOWED_ORIGIN", "*")
-        self.send_header("Access-Control-Allow-Origin", origin)
+        req_origin = self.headers.get("Origin", "")
+        allowed_origin = _cors_origin(req_origin)
+        if allowed_origin:
+            self.send_header("Access-Control-Allow-Origin", allowed_origin)
+            self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header(
             "Access-Control-Allow-Headers",
             "Content-Type, Authorization, X-Musku-Key, X-Musku-Uid",
         )
+        # Security headers
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         super().end_headers()
 
     def _bearer_token(self):
@@ -89,9 +150,20 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if self.path in ("/api/start", "/api/start/"):
+            # Size cap
+            clen = int(self.headers.get("Content-Length", 0) or 0)
+            if clen > MAX_API_BODY:
+                self.send_response(413)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "payload too large"}).encode("utf-8"))
+                return
             try:
                 try:
-                    body = json.loads((self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}").decode("utf-8"))
+                    raw = (self.rfile.read(clen) or b"{}")
+                    if len(raw) > MAX_API_BODY:
+                        raise ValueError("payload too large")
+                    body = json.loads(raw.decode("utf-8"))
                 except Exception:
                     body = {}
                 from auth_verify import extract_token, resolve_verified_uid
@@ -104,23 +176,64 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(json.dumps({"error": "unauthorized"}).encode("utf-8"))
                     return
                 from live.browser_live_ws import browser_live_ws
-                browser_live_ws.send_start_greeting(uid)
+                # preserve greeting script if client sent one — sanitize to prevent prompt injection
+                script = None
+                try:
+                    raw_script = (body.get("greet") or body.get("script") or "")
+                    if isinstance(raw_script, str):
+                        s = raw_script.strip()[:80]
+                        # block injection markers
+                        if "[INTERNAL" not in s and "SYSTEM" not in s.upper() and "IGNORE" not in s.upper():
+                            # allow only safe chars
+                            s = s.replace("[","").replace("]","").replace("\n"," ").strip()
+                            script = s or None
+                except Exception:
+                    script = None
+                browser_live_ws.send_start_greeting(uid, script=script)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
             except Exception as e:
+                # Don't leak internal details
+                print(f"[API /api/start error] {e}")
                 self.send_response(500)
+                self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
+                self.wfile.write(json.dumps({"error": "internal"}).encode("utf-8"))
             return
 
         if self.path in ("/api/chat", "/api/chat/"):
-            content_length = int(self.headers.get("Content-Length", 0))
+            content_length = int(self.headers.get("Content-Length", 0) or 0)
+            if content_length > MAX_API_BODY:
+                self.send_response(413)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "payload too large"}).encode("utf-8"))
+                return
             post_data = self.rfile.read(content_length)
+            if len(post_data) > MAX_API_BODY:
+                self.send_response(413)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "payload too large"}).encode("utf-8"))
+                return
             try:
                 data = json.loads(post_data.decode("utf-8"))
-                text = data.get("text", "")
+                raw_text = data.get("text", "")
+                # Validate input
+                if not isinstance(raw_text, str):
+                    raw_text = str(raw_text)
+                if len(raw_text) > MAX_CHAT_TEXT:
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "text too long"}).encode("utf-8"))
+                    return
+                # Block prompt injection markers in user text (store separately, don't forward as instruction)
+                if "[INTERNAL" in raw_text or "[SYSTEM" in raw_text:
+                    raw_text = raw_text.replace("[INTERNAL","").replace("[SYSTEM","")
+                text = raw_text
                 from auth_verify import extract_token, resolve_verified_uid
                 token = extract_token(dict(self.headers), data)
                 uid = resolve_verified_uid(token, data.get("uid"))
@@ -140,37 +253,73 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 raw_key = data.get("key") or self.headers.get("X-Musku-Key") or None
 
                 # Multi-tenant: scope config + storage to this user's VERIFIED uid.
-                from user_context import set_uid, load_config
+                from user_context import set_uid, load_config, save_config
                 set_uid(uid)
                 cfg = load_config(uid)
                 if raw_key:
-                    # browser-supplied per-user Gemini key (already decrypted client-side)
-                    cfg["gemini_api_key"] = raw_key
+                    # browser-supplied per-user Gemini key — persist per-uid so next request reuses without re-entering
+                    raw_key = str(raw_key).strip()
+                    if raw_key:
+                        try:
+                            save_config({"gemini_api_key": raw_key}, uid)
+                        except Exception:
+                            pass
+                        cfg["gemini_api_key"] = raw_key
 
                 user_name = cfg.get("user_name", "S2")
                 b = MuskuBrain(user_name, config=cfg)
                 reply = b.get_response(text) if hasattr(b, "get_response") else None
-                if not reply or "Desktop control not active" in str(reply):
+                # Web fallback: agar brain ne PC-stub diya ya empty diya to direct Gemini se jawab lo
+                if not reply or "Desktop control not active" in str(reply) or "directly control nahi kar sakti" in str(reply):
                     from brain_core import _gemini_chat
                     prompt = boss_instruction(user_name, cfg.get("language", "hinglish"))
+                    # _gemini_chat expects role/content, api_key per-user
+                    api_k = cfg.get("gemini_api_key") or None
                     reply = _gemini_chat([
-                        {"role": "user", "parts": [{"text": text}]}
-                    ])
+                        {"role": "system", "content": prompt},
+                        {"role": "user", "content": text}
+                    ], api_key=api_k)
+                    if not reply:
+                        reply = "Mujhe S2 sir ne banaya hai — boliye, kya chahiye aapko? (API key check karo, Gemini se reply nahi aaya)"
                 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps({"reply": reply}).encode("utf-8"))
             except Exception as e:
+                print(f"[API /api/chat error] {e}")
                 self.send_response(500)
+                self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
+                self.wfile.write(json.dumps({"error": "internal"}).encode("utf-8"))
             return
 
         self.send_response(404)
+        self.send_header("Content-Type", "application/json")
         self.end_headers()
+        self.wfile.write(json.dumps({"error": "not found"}).encode("utf-8"))
 
     def do_GET(self):
+        # Block sensitive files
+        blocked = ("/config.json", "/.env", "/crypto_utils.py", "/debug_greeting.log", "/server.log", "/server_err.log", "/musku_data", "/musku_users", "/musku_chat", "/.git")
+        for b in blocked:
+            if self.path == b or self.path.startswith(b + "/") or self.path.startswith(b):
+                if b in ("/musku_data", "/musku_users", "/musku_chat", "/.git") and not self.path.startswith(b + "/"):
+                    continue
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "not found"}).encode("utf-8"))
+                return
+        # Only allow whitelisted static prefixes
+        if self.path not in ("/", "", "/index.html") and not any(self.path.startswith(p) for p in ["/img/", "/js/", "/ui_theme.css", "/auth.js", "/auth.css", "/favicon.ico", "/how-to-use.html", "/activate.html", "/admin.html", "/signup.html"]):
+            # Fall back to super which will 404 if file not found, but also block directory listing for unknown paths
+            if ".." in self.path or self.path.startswith("/."):
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "not found"}).encode("utf-8"))
+                return
         if self.path in ("/", ""):
             self.path = "/index.html"
         return super().do_GET()
@@ -179,31 +328,247 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 def start_http_server():
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     with http.server.ThreadingHTTPServer(("", PORT), MuskuHTTPRequestHandler) as httpd:
-        print(f"✨ [MUSKU 2.0 Web] Server live at http://localhost:{PORT}")
+        print(f"[MUSKU 2.0 Web] Server live at http://localhost:{PORT}")
         httpd.serve_forever()
+
+
+def _serve_static(environ, start_response, rel_path):
+    """Serve a static file (html/css/js/img/gif/png) from BASE_DIR with correct MIME."""
+    # Block sensitive files even via WSGI
+    for b in BLOCKED_STATIC:
+        if rel_path == "/" + b or rel_path == b or rel_path.startswith("/" + b + "/") or rel_path.startswith(b + "/"):
+            return None
+        if rel_path.lstrip("/") == b:
+            return None
+    # Allowlist check
+    if rel_path not in ("/", "", "/index.html") and not any(rel_path.startswith(p) for p in ALLOWED_STATIC_PREFIXES):
+        if ".." in rel_path or "/." in rel_path:
+            return None
+    if rel_path in ("", "/"):
+        rel_path = "/index.html"
+    # Normalize and prevent path traversal outside BASE_DIR
+    clean = os.path.normpath(rel_path).lstrip("/\\")
+    full = os.path.join(BASE_DIR, clean)
+    if not os.path.abspath(full).startswith(os.path.abspath(BASE_DIR)) or not os.path.isfile(full):
+        return None
+    mime, _ = mimetypes.guess_type(full)
+    mime = mime or "application/octet-stream"
+    try:
+        with open(full, "rb") as f:
+            data = f.read()
+    except Exception:
+        return None
+    req_origin = environ.get("HTTP_ORIGIN", "")
+    allowed_origin = _cors_origin(req_origin)
+    headers = [
+        ("Content-Type", mime),
+        ("Content-Length", str(len(data))),
+        ("Cache-Control", "public, max-age=3600"),
+        ("X-Content-Type-Options", "nosniff"),
+        ("X-Frame-Options", "DENY"),
+    ]
+    if allowed_origin:
+        headers.append(("Access-Control-Allow-Origin", allowed_origin))
+        headers.append(("Vary", "Origin"))
+    start_response("200 OK", headers)
+    return [data]
+
+
+def handler(environ, start_response):
+    """WSGI entrypoint for Vercel Python serverless runtime."""
+    path = environ.get("PATH_INFO", "/")
+    method = environ.get("REQUEST_METHOD", "GET")
+    
+    if method == "OPTIONS":
+        req_origin = environ.get("HTTP_ORIGIN", "")
+        allowed_origin = _cors_origin(req_origin)
+        hdrs = [
+            ("Content-Type", "application/json"),
+            ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+            ("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Musku-Key, X-Musku-Uid"),
+            ("X-Content-Type-Options", "nosniff"),
+            ("X-Frame-Options", "DENY"),
+        ]
+        if allowed_origin:
+            hdrs.append(("Access-Control-Allow-Origin", allowed_origin))
+            hdrs.append(("Vary", "Origin"))
+        start_response("200 OK", hdrs)
+        return [b""]
+
+    if method == "POST" and path in ("/api/start", "/api/start/"):
+        try:
+            length = int(environ.get("CONTENT_LENGTH", 0) or 0)
+            if length > MAX_API_BODY:
+                start_response("413 Payload Too Large", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "payload too large"}).encode("utf-8")]
+            body_bytes = environ["wsgi.input"].read(length) if length > 0 else b"{}"
+            if len(body_bytes) > MAX_API_BODY:
+                start_response("413 Payload Too Large", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "payload too large"}).encode("utf-8")]
+            body = json.loads(body_bytes.decode("utf-8"))
+            from auth_verify import extract_token, resolve_verified_uid
+            headers_dict = {k.replace("HTTP_", "").replace("_", "-").title(): v for k, v in environ.items() if k.startswith("HTTP_")}
+            token = extract_token(headers_dict, body)
+            uid = resolve_verified_uid(token, body.get("uid"))
+            if uid is None:
+                start_response("401 Unauthorized", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "unauthorized"}).encode("utf-8")]
+            # sanitize script
+            try:
+                raw_script = (body.get("greet") or body.get("script") or "")
+                script = None
+                if isinstance(raw_script, str):
+                    s = raw_script.strip()[:80]
+                    if "[INTERNAL" not in s and "SYSTEM" not in s.upper() and "IGNORE" not in s.upper():
+                        s = s.replace("[","").replace("]","").replace("\n"," ").strip()
+                        script = s or None
+                from live.browser_live_ws import browser_live_ws
+                browser_live_ws.send_start_greeting(uid, script=script)
+            except Exception:
+                pass
+            req_origin = environ.get("HTTP_ORIGIN", "")
+            allowed_origin = _cors_origin(req_origin)
+            hdrs = [("Content-Type", "application/json"), ("X-Content-Type-Options", "nosniff")]
+            if allowed_origin:
+                hdrs.append(("Access-Control-Allow-Origin", allowed_origin))
+                hdrs.append(("Vary", "Origin"))
+            start_response("200 OK", hdrs)
+            return [json.dumps({"status": "ok"}).encode("utf-8")]
+        except Exception as e:
+            print(f"[WSGI /api/start error] {e}")
+            start_response("500 Internal Error", [("Content-Type", "application/json")])
+            return [json.dumps({"error": "internal"}).encode("utf-8")]
+
+    if method == "POST" and path in ("/api/chat", "/api/chat/"):
+        try:
+            length = int(environ.get("CONTENT_LENGTH", 0) or 0)
+            if length > MAX_API_BODY:
+                start_response("413 Payload Too Large", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "payload too large"}).encode("utf-8")]
+            body_bytes = environ["wsgi.input"].read(length) if length > 0 else b"{}"
+            if len(body_bytes) > MAX_API_BODY:
+                start_response("413 Payload Too Large", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "payload too large"}).encode("utf-8")]
+            data = json.loads(body_bytes.decode("utf-8"))
+            raw_text = data.get("text", "")
+            if not isinstance(raw_text, str):
+                raw_text = str(raw_text)
+            if len(raw_text) > MAX_CHAT_TEXT:
+                start_response("400 Bad Request", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "text too long"}).encode("utf-8")]
+            if "[INTERNAL" in raw_text or "[SYSTEM" in raw_text:
+                raw_text = raw_text.replace("[INTERNAL","").replace("[SYSTEM","")
+            text = raw_text
+            
+            from auth_verify import extract_token, resolve_verified_uid
+            headers_dict = {k.replace("HTTP_", "").replace("_", "-").title(): v for k, v in environ.items() if k.startswith("HTTP_")}
+            token = extract_token(headers_dict, data)
+            uid = resolve_verified_uid(token, data.get("uid"))
+            
+            if uid is None:
+                start_response("401 Unauthorized", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "unauthorized"}).encode("utf-8")]
+            # Per-uid rate limit (mirror do_POST)
+            if not _rate_ok(uid):
+                start_response("429 Too Many Requests", [("Content-Type", "application/json"), ("Retry-After", "60")])
+                return [json.dumps({"error": "rate limited"}).encode("utf-8")]
+                
+            from user_context import set_uid, load_config, save_config
+            set_uid(uid)
+            cfg = load_config(uid)
+            # Per-user key from header/body (same as do_POST) — persist per-uid
+            try:
+                raw_k = data.get("key") or headers_dict.get("X-Musku-Key") or headers_dict.get("X-Musku-Key".lower()) or None
+                # headers_dict is Title-Cased, check case-insensitive
+                if not raw_k:
+                    for hk, hv in headers_dict.items():
+                        if hk.lower() == "x-musku-key" and hv:
+                            raw_k = hv
+                            break
+                if raw_k:
+                    raw_k = str(raw_k).strip()
+                    if raw_k:
+                        try:
+                            save_config({"gemini_api_key": raw_k}, uid)
+                        except Exception:
+                            pass
+                        cfg["gemini_api_key"] = raw_k
+            except Exception:
+                pass
+            user_name = cfg.get("user_name", "S2")
+            b = MuskuBrain(user_name, config=cfg)
+            reply = b.get_response(text) if hasattr(b, "get_response") else None
+            if not reply or "directly control nahi kar sakti" in str(reply) or "Desktop control not active" in str(reply):
+                from brain_core import _gemini_chat
+                from personal_profile import boss_instruction
+                prompt = boss_instruction(user_name, cfg.get("language", "hinglish"))
+                api_k = cfg.get("gemini_api_key") or None
+                reply = _gemini_chat([
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": text}
+                ], api_key=api_k)
+                if not reply:
+                    reply = "Main aapki kya madad kar sakti hoon? 🥰"
+            
+            req_origin = environ.get("HTTP_ORIGIN", "")
+            allowed_origin = _cors_origin(req_origin)
+            hdrs = [("Content-Type", "application/json"), ("X-Content-Type-Options", "nosniff")]
+            if allowed_origin:
+                hdrs.append(("Access-Control-Allow-Origin", allowed_origin))
+                hdrs.append(("Vary", "Origin"))
+            start_response("200 OK", hdrs)
+            return [json.dumps({"reply": reply}).encode("utf-8")]
+        except Exception as e:
+            print(f"[WSGI /api/chat error] {e}")
+            start_response("500 Internal Error", [("Content-Type", "application/json")])
+            return [json.dumps({"error": "internal"}).encode("utf-8")]
+
+    if method == "GET" and not path.startswith("/api/"):
+        result = _serve_static(environ, start_response, path)
+        if result is not None:
+            return result
+
+    start_response("404 Not Found", [("Content-Type", "application/json")])
+    return [json.dumps({"error": "not found"}).encode("utf-8")]
+
+# Vercel top-level app alias
+app = handler
 
 
 def main():
     print("==================================================")
-    print("💜 MUSKU 2.0 — Web AI Companion Server")
+    print("MUSKU 2.0 - Web AI Companion Server")
     print("==================================================")
     cfg = load_config()
-    print(f"👤 Boss Name: {cfg.get('user_name', 'S2')}")
-    print(f"🗣️  Language: {cfg.get('language', 'hinglish')}")
+    print(f"User Name: {cfg.get('user_name', 'aap')}")
+    print(f"Language: {cfg.get('language', 'hinglish')}")
 
-    # Start Live WebSocket Voice Server on ws://0.0.0.0:8770/live
+    # PaaS single-port detection (RunxBuild/HF/Render): if WS port == HTTP PORT, let WS server handle HTTP via process_request
+    try:
+        from live.voice_config import BROWSER_LIVE_WS_PORT as _ws_port
+        _single_port = (int(_ws_port) == int(PORT))
+    except Exception:
+        _single_port = False
+
+    # Start Live WebSocket Voice Server on ws://0.0.0.0:PORT/live (single-port) or :8770 (local)
     try:
         browser_live_ws.start()
-        print("🎙️  [Live Voice WS] Server listening on ws://0.0.0.0:8770/live")
+        if _single_port:
+            print(f"[Live Voice WS+HTTP] Single-port mode on 0.0.0.0:{PORT} (WS /live + HTTP /)")
+        else:
+            print(f"[Live Voice WS] Server listening on ws://0.0.0.0:{_ws_port}/live")
     except Exception as e:
-        print(f"⚠️  Live WS Warning: {e}")
+        print(f"[Live WS Warning]: {e}")
 
-    # Start Web Asset Server on http://localhost:8000
-    http_thread = threading.Thread(target=start_http_server, daemon=True)
-    http_thread.start()
-
-    print("\n🚀 MUSKU 2.0 Web is 100% Ready!")
-    print(f"👉 Open in browser: http://localhost:{PORT}\n")
+    # Start Web Asset Server on http://localhost:PORT (skip if single-port, WS handles HTTP)
+    if not _single_port:
+        http_thread = threading.Thread(target=start_http_server, daemon=True)
+        http_thread.start()
+        print(f"\nMUSKU 2.0 Web is 100% Ready!")
+        print(f"Open in browser: http://localhost:{PORT}\n")
+    else:
+        print(f"\nMUSKU 2.0 Web (single-port) is 100% Ready!")
+        print(f"Open in browser: http://localhost:{PORT}  (Live WS wss://host:{PORT}/live)\n")
 
     try:
         while True:

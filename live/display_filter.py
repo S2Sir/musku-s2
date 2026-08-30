@@ -37,12 +37,27 @@ def normalize_musku_name(text: str) -> str:
     return out
 
 
+_JAPANESE_RE = re.compile(r"[\u3040-\u30FF\u4E00-\u9FFF\u3400-\u4DBF]")
+
 def live_display_text(text: str) -> str:
     if not text:
         return text
-    out = deva_to_hinglish(str(text))
+    raw = str(text).strip()
+    # Drop pure Japanese/Kana/Kanji noise (e.g. \"ある ある\") — Musku ko galat context mat bhejo
+    if raw and _JAPANESE_RE.search(raw):
+        # If majority is Japanese, drop entirely
+        jp_chars = len(_JAPANESE_RE.findall(raw))
+        if jp_chars >= 2 or jp_chars / max(1, len(raw)) > 0.3:
+            return ""
+    # Very short non-Latin non-Devanagari = likely garbled
+    if raw and len(raw) < 3 and re.search(r"[^\x00-\x7F]", raw) and not re.search(r"[\u0900-\u097F]", raw):
+        return ""
+    out = deva_to_hinglish(raw)
     out = normalize_musku_name(out)
     out = enforce_musku_identity(out)
     for token in _WHITELIST:
         out = re.compile(re.escape(token), re.IGNORECASE).sub(token, out)
-    return out
+    # Final: if still Japanese after conversion, drop
+    if out and _JAPANESE_RE.search(out):
+        return ""
+    return out.strip()

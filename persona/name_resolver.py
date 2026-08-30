@@ -134,8 +134,22 @@ def save_user_name(name: str) -> bool:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     data = json.load(f)
             data["user_name"] = name
-            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=4, ensure_ascii=False)
+            # atomic write to avoid 00-byte corruption on crash
+            import tempfile
+            dir_name = os.path.dirname(os.path.abspath(CONFIG_FILE)) or "."
+            fd, tmp = tempfile.mkstemp(dir=dir_name)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=4, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp, CONFIG_FILE)
+            finally:
+                try:
+                    if os.path.exists(tmp):
+                        os.remove(tmp)
+                except Exception:
+                    pass
         except Exception:
             pass
         # user_profile.json — best-effort mirror

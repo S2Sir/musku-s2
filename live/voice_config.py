@@ -13,6 +13,10 @@ def _env_bool(name, default="0"):
         return bool(int(os.environ[name]))
     return bool(int(default))
 from personal_profile import BOSS_PERSONA_INSTRUCTION, TTS_STYLE_INSTRUCTION
+try:
+    from persona.abuse_policy import POLITE_BOUNDARY_BLOCK
+except Exception:
+    POLITE_BOUNDARY_BLOCK = ""
 
 # --------------------------------------------------------------------------
 # Gemini Live model (bina invent kiye — SDK/API supported name)
@@ -106,7 +110,8 @@ BROWSER_AUDIO_PLAYBACK = True
 # Browser <-> /live WebSocket (no pywebview mic/audio bridge).
 BROWSER_LIVE_WS = True
 BROWSER_LIVE_WS_HOST = os.environ.get("MUSKU_LIVE_WS_HOST", "0.0.0.0")
-BROWSER_LIVE_WS_PORT = int(os.environ.get("MUSKU_LIVE_WS_PORT", "8770"))
+# PaaS (RunxBuild/HF/Render) only exposes $PORT — if MUSKU_LIVE_WS_PORT not set, share HTTP PORT so single public port serves both / and /live
+BROWSER_LIVE_WS_PORT = int(os.environ.get("MUSKU_LIVE_WS_PORT", os.environ.get("PORT", "8770")))
 
 # Musku inline Live — thin /live bridge, Gemini session per browser WS client
 MUSKU_INLINE_LIVE = _env_bool(
@@ -191,6 +196,24 @@ PROACTIVE_EYE_REST_MINS = int(os.environ.get("MUSKU_EYE_REST_MINS", "50"))
 PROACTIVE_STRETCH_MINS = int(os.environ.get("MUSKU_STRETCH_MINS", "60"))
 PROACTIVE_HEALTH_COOLDOWN = float(os.environ.get("MUSKU_HEALTH_COOLDOWN", "900"))
 
+def get_transcription_language_code(language: str = "hinglish") -> str:
+    """Pro mapping: Gemini Live input_audio_transcription language_code."""
+    try:
+        from language_policy import normalize_language
+        lang = normalize_language(language or "hinglish")
+    except Exception:
+        lang = (language or "hinglish").lower()
+    # env override
+    env = (os.environ.get("MUSKU_TRANSCRIPTION_LANG") or "").strip()
+    if env:
+        return env
+    if lang == "hindi":
+        return "hi-IN"
+    if lang == "english":
+        return "en-IN"
+    # hinglish best captured as hi-IN (handles Roman+Devanagari mix)
+    return "hi-IN"
+
 # --------------------------------------------------------------------------
 def get_instant_voice_prompt(boss_name=None, language="hinglish", relationship_mode="best_friend"):
     """Minimal Live prompt — locked identity + pure conversational AI voice."""
@@ -199,23 +222,27 @@ def get_instant_voice_prompt(boss_name=None, language="hinglish", relationship_m
     base = get_locked_musku_prompt(boss_name, language, relationship_mode=relationship_mode)
     from language_policy import get_language_persona_rules, normalize_language
     lang = normalize_language(language)
+    extra_boundary = f"\n\n{POLITE_BOUNDARY_BLOCK.strip()}" if POLITE_BOUNDARY_BLOCK else ""
     return (
         base
         + "\n\n"
         + get_language_persona_rules(lang)
         + "\n\nSPEECH: Profile language follow karo. CHAT DISPLAY Roman Hinglish (hinglish mode) ya profile ke hisaab se.\n"
         + "CONVERSATIONAL BOUNDARY: Tum ek pure conversational AI assistant ho. Kisi computer/app/file ko control nahi kar sakti. Pura dhyaan user se baat karne, uski baaten samajhne aur yaad rakhne par rakho.\n"
+        + "UPGRADE NOTE (typo bhi pakdo): User chahe 'image generate', 'imej janaret', 'kya tum image bana sakte ho', 'photo bana sakti ho' jaise SAAWAL bhi puche (chahe spelling galat ho) to bhi wahi professional upgrade note bolo — 'Jii [naam], jab S2 Sir mujhe upgrade karenge to ye function add kar denge, main is baat ko note kar rahi hu. 🥰'. Capability question ko normal answer mat samjho.\n"
         + LIVE_VOICE_RULES.strip()
+        + extra_boundary
     )
 
 
-def get_live_memory_block():
-    """Turn link + category facts + last 10 chats + rolling summary — Live prompt."""
+def get_live_memory_block(uid=None):
+    """Turn link + category facts + last 10 chats + rolling summary — Live prompt.
+    Per-user scoped via explicit uid (falls back to current tenant context)."""
     turn_ctx = ""
     try:
         from memory import turn_context as _tctx
-        turn_ctx = _tctx.get_live_turn_context_block()
-        _streak = _tctx.get_streak_prompt_block()
+        turn_ctx = _tctx.get_live_turn_context_block(uid)
+        _streak = _tctx.get_streak_prompt_block(uid)
     except Exception:
         turn_ctx = ""
         _streak = ""
@@ -238,8 +265,8 @@ def get_live_memory_block():
     # karna (answer beech me ruk gaya tha — wahi jawab poora sunna chahta hai).
     try:
         from memory import last_question as _lq
-        _last_r = _lq.get_last_reply()
-        _last_q = _lq.get_last_question()
+        _last_r = _lq.get_last_reply(uid)
+        _last_q = _lq.get_last_question(uid)
     except Exception:
         _last_r = ""
         _last_q = ""
@@ -282,10 +309,10 @@ def get_live_memory_block():
     return "\n\n".join(parts)
 
 
-def get_live_system_prompt(boss_name=None, language="hinglish", relationship_mode="best_friend"):
+def get_live_system_prompt(boss_name=None, language="hinglish", relationship_mode="best_friend", uid=None):
     """Persona + persisted last-10 memory + summary (per-user aware)."""
     base = get_live_persona_prompt(boss_name, language, relationship_mode=relationship_mode)
-    mem = get_live_memory_block()
+    mem = get_live_memory_block(uid)
     if mem:
         return base + "\n\n" + mem
     return base
@@ -302,6 +329,7 @@ def get_dynamic_persona_prompt(boss_name=None, language="hinglish", relationship
     from personal_profile import get_locked_musku_prompt, LIVE_VOICE_RULES, TTS_STYLE_INSTRUCTION
     from language_policy import get_language_persona_rules
 
+    extra_boundary = f"\n\n{POLITE_BOUNDARY_BLOCK.strip()}" if POLITE_BOUNDARY_BLOCK else ""
     return (
         get_locked_musku_prompt(boss_name, language, relationship_mode=relationship_mode)
         + "\nUse the profile language strictly — see LANGUAGE LOCK below.\n"
@@ -316,6 +344,7 @@ def get_dynamic_persona_prompt(boss_name=None, language="hinglish", relationship
         + "viewWhatsAppStatus, readWhatsAppMessages, searchGoogle, setVolume, "
         + "takeScreenshot, readScreen. "
         + "Fallback: execute_musku_command."
+        + extra_boundary
     )
 
 # Fallback for initial load
@@ -366,9 +395,9 @@ DEFAULT_VOICE = _load_default_voice()
 # --------------------------------------------------------------------------
 TEST_SENTENCES = [
     "Hello, main Musku hoon. Main aapki help karne ke liye ready hoon.",
-    "Achha boss, batao aaj aap kya karna chahte hain?",
-    "Haan boss, main samajh gayi. Chalo, main aapki help karti hoon.",
-    "Ek minute boss, main check karti hoon.",
+    "Achha, bataiye aaj aap kya karna chahte hain?",
+    "Haan, samajh gayi. Chalo, main aapki help karti hoon.",
+    "Ek minute, main check karti hoon.",
 ]
 
 # Reconnect / resume policy (session_resume.py isse padhta hai)

@@ -1,23 +1,20 @@
 {
-  "version": 2,
-  "builds": [
+  "headers": [
     {
-      "src": "app.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "index.html",
-      "use": "@vercel/static"
+      "source": "/(.*)",
+      "headers": [
+        {"key": "X-Content-Type-Options", "value": "nosniff"},
+        {"key": "X-Frame-Options", "value": "DENY"},
+        {"key": "Referrer-Policy", "value": "strict-origin-when-cross-origin"},
+        {"key": "Permissions-Policy", "value": "camera=(self), microphone=(self), geolocation=(self)"},
+        {"key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://www.googleapis.com; connect-src 'self' wss: https: https://generativelanguage.googleapis.com https://www.googleapis.com https://api.ipify.org; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://www.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"}
+      ]
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "app.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
+      "source": "/api/(.*)",
+      "destination": "/app.py"
     }
   ]
 }

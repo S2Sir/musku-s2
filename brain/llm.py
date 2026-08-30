@@ -57,14 +57,14 @@ def get_gemini_client(api_key=None):
                 cfg = json.load(f)
             key = cfg.get("gemini_api_key") or cfg.get("google_api_key") or ""
             if key:
+                try:
+                    from crypto_utils import decrypt_value
+                    key = decrypt_value(key)
+                except Exception:
+                    pass
                 client = genai.Client(api_key=key)
                 _LLM_GEMINI_CACHE["__global__"] = client
                 return client
-    except Exception:
-        pass
-    return None
-            _LLM_GEMINI_CACHE["__global__"] = client
-            return client
     except Exception:
         pass
     return None

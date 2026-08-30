@@ -1,0 +1,72 @@
+{
+  "rules": {
+    "musku_web_profiles": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "musku_traces": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "musku_users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "musku_users_by_email": {
+      "$ek": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "musku_email_index": {
+      "$ek": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "freeClaims": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "freeClaims_by_email": {
+      "$ek": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "musku_keys": {
+      "$key": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "musku_keys_hash": {
+      "$hash": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "musku_activations": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "musku_activations_by_email": {
+      "$ek": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}

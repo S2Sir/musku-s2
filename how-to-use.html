@@ -8,29 +8,64 @@
 <link rel="stylesheet" href="auth.css">
 <style>
 .guide-frame{ max-width:660px; }
-.hero-mini{ text-align:center; padding:18px 14px; background:linear-gradient(145deg, rgba(192,132,252,.12), var(--panel)); border:1px solid var(--border); border-radius:16px; margin-bottom:14px; position:relative; z-index:1; }
-.hero-mini h2{ font-size:16px; color:#fff; margin:0; }
-.hero-mini p{ font-size:11px; color:#8a8aa3; margin:6px 0 0; line-height:1.6; }
-.hero-badges{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
+/* Unified hero — ek hi section me sab (MUSKU + subtitle + easy pill + steps + badges) */
+.hero-unified{ text-align:center; padding:28px 16px 18px; background:linear-gradient(145deg, color-mix(in srgb, var(--a1) 12%, var(--panel)), var(--panel)); border:1px solid color-mix(in srgb, var(--a1) 22%, var(--border)); border-radius:20px; margin-bottom:14px; position:relative; z-index:1; overflow:visible; display:flex; flex-direction:column; align-items:center; gap:6px; }
+.hero-unified::before{ content:""; position:absolute; inset:-1px; border-radius:20px; padding:1px; background:linear-gradient(135deg, color-mix(in srgb, var(--a1) 32%, transparent), color-mix(in srgb, var(--a2) 24%, transparent)); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; opacity:.65; pointer-events:none; }
+.hero-unified .auth-logo{ font-size:26px; font-weight:800; letter-spacing:7px; color:#fff; text-shadow:0 0 18px rgba(192,132,252,.8); line-height:1.25; padding:2px 0; width:100%; }
+.hero-unified .auth-sub{ font-size:10px; font-weight:700; letter-spacing:3.2px; color:var(--a2); margin-top:2px; width:100%; line-height:1.4; }
+.easy-pill{ display:flex; align-items:center; justify-content:center; gap:8px; margin:12px auto 0; padding:11px 18px; border-radius:999px; background:linear-gradient(135deg, color-mix(in srgb, var(--a1) 16%, transparent), color-mix(in srgb, var(--a2) 12%, transparent)); border:1px solid color-mix(in srgb, var(--a1) 28%, transparent); color:#fff; font-size:12.5px; font-weight:800; box-shadow:0 0 14px color-mix(in srgb, var(--a1) 14%, transparent); width:100%; max-width:340px; box-sizing:border-box; white-space:nowrap; position:relative; z-index:2; }
+.easy-pill span{ color:var(--a1); }
+.hero-mini{ text-align:center; padding:20px 14px; background:linear-gradient(145deg, color-mix(in srgb, var(--a1) 12%, var(--panel)), var(--panel)); border:1px solid color-mix(in srgb, var(--a1) 22%, var(--border)); border-radius:16px; margin-bottom:14px; position:relative; z-index:1; overflow:hidden; }
+.hero-mini::before{ content:""; position:absolute; inset:-1px; border-radius:16px; padding:1px; background:linear-gradient(135deg, color-mix(in srgb, var(--a1) 30%, transparent), color-mix(in srgb, var(--a2) 22%, transparent)); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; opacity:.6; pointer-events:none; }
+.hero-mini h2{ font-size:16px; color:#fff; margin:0; letter-spacing:.3px; }
+.hero-mini .sub{ font-size:11px; color:#8a8aa3; margin:6px 0 0; line-height:1.6; }
+.hero-flow{ display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; margin-top:14px; font-size:11px; font-weight:800; color:#fff; width:100%; }
+.hero-flow .step{ padding:6px 10px; border-radius:999px; background:color-mix(in srgb, var(--a1) 14%, transparent); border:1px solid color-mix(in srgb, var(--a1) 22%, transparent); }
+.hero-flow .arrow{ color:var(--a2); font-size:12px; }
+.hero-badges{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:12px; width:100%; }
 .hero-badges span{ font-size:9px; font-weight:800; letter-spacing:.6px; padding:5px 9px; border-radius:999px; border:1px solid var(--border); background:rgba(255,255,255,.04); color:#cfc8e8; }
+@media(max-width:380px){ .easy-pill{ font-size:11px; padding:10px 12px; } .hero-unified .auth-logo{ font-size:22px; letter-spacing:5px; } }
+
 .steps{ display:flex; flex-direction:column; gap:12px; position:relative; z-index:1; }
-.card{ background:linear-gradient(180deg, var(--panel2), var(--panel)); border:1px solid var(--border); border-radius:16px; padding:16px 14px; }
-.card h3{ font-size:13px; color:#fff; margin:0 0 6px; display:flex; align-items:center; gap:6px; }
-.card p{ font-size:11px; color:#cfc8e8; line-height:1.65; margin:0; }
-.card ul{ margin:6px 0 0 16px; padding:0; }
-.card li{ font-size:11px; color:#cfc8e8; line-height:1.6; margin-bottom:3px; }
-.num{ width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#0b0818; background:linear-gradient(135deg, var(--a1), var(--a2)); flex-shrink:0; }
-.tip{ background:rgba(192,132,252,.08); border:1px dashed var(--border); border-radius:10px; padding:10px; font-size:11px; color:#cfc8e8; margin-top:8px; line-height:1.6; }
+.card{ background:linear-gradient(180deg, var(--panel2), var(--panel)); border:1px solid var(--border); border-radius:16px; padding:16px 14px; position:relative; overflow:hidden; }
+.card::before{ content:""; position:absolute; inset:-1px; border-radius:16px; padding:1px; background:linear-gradient(135deg, color-mix(in srgb, var(--a1) 18%, transparent), transparent 60%); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; opacity:.45; pointer-events:none; }
+.card h3{ font-size:13px; color:#fff; margin:0 0 6px; display:flex; align-items:center; gap:8px; }
+.card p{ font-size:11px; color:#cfc8e8; line-height:1.7; margin:0; }
+.card ul{ margin:8px 0 0 16px; padding:0; }
+.card li{ font-size:11px; color:#cfc8e8; line-height:1.65; margin-bottom:4px; }
+.card li::marker{ color:var(--a1); }
+.num{ width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#0b0818; background:linear-gradient(135deg, var(--a1), var(--a2)); flex-shrink:0; box-shadow:0 2px 10px color-mix(in srgb, var(--a1) 30%, transparent); }
+.tip{ background:rgba(192,132,252,.08); border:1px dashed color-mix(in srgb, var(--a1) 28%, transparent); border-radius:10px; padding:10px; font-size:11px; color:#cfc8e8; margin-top:8px; line-height:1.6; }
 .warn{ background:rgba(255,23,68,.08); border:1px solid rgba(255,23,68,.25); border-radius:10px; padding:10px; font-size:11px; color:#ffb3c8; margin-top:8px; line-height:1.6; }
 .ok{ background:rgba(67,233,123,.08); border:1px solid rgba(67,233,123,.25); border-radius:10px; padding:10px; font-size:11px; color:#a7f3d0; margin-top:8px; line-height:1.6; }
-.mini-table{ width:100%; border-collapse:collapse; margin-top:8px; font-size:11px; }
-.mini-table th,.mini-table td{ text-align:left; padding:7px 8px; border:1px solid var(--border); }
-.mini-table th{ color:#fff; background:color-mix(in srgb, var(--a1) 14%, transparent); font-size:10px; letter-spacing:.5px; }
-.mini-table td{ color:#cfc8e8; }
+.ex{ margin-top:8px; padding:10px 11px; border-radius:10px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); font-size:11px; color:#9aa0b8; line-height:1.6; font-style:italic; }
+.ex b{ color:#cfc8e8; font-style:normal; }
+.use-grid{ display:grid; grid-template-columns:1fr; gap:8px; margin-top:10px; }
+.use-item{ display:flex; gap:10px; align-items:flex-start; padding:10px 11px; border-radius:12px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.05); }
+.use-item .ic{ width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; background:linear-gradient(135deg, color-mix(in srgb, var(--a1) 18%, transparent), color-mix(in srgb, var(--a2) 12%, transparent)); border:1px solid color-mix(in srgb, var(--a1) 18%, transparent); }
+.use-item b{ font-size:11px; color:#fff; display:block; margin-bottom:2px; }
+.use-item span{ font-size:11px; color:#8a8aa3; line-height:1.5; }
+.chip-row{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.chip{ font-size:9px; font-weight:800; letter-spacing:.6px; padding:5px 8px; border-radius:999px; background:rgba(255,255,255,.04); border:1px solid var(--border); color:#cfc8e8; }
+.chip-no{ background:rgba(255,23,68,.08); border-color:rgba(255,23,68,.22); color:#ffb3c8; }
+.coming-grid{ display:grid; grid-template-columns:1fr; gap:10px; margin-top:10px; }
+@media(min-width:520px){ .coming-grid{ grid-template-columns:1fr 1fr; } }
+.coming-card{ background:linear-gradient(165deg, color-mix(in srgb, var(--panel2) 92%, transparent), var(--panel)); border:1px solid var(--border); border-radius:14px; padding:12px 11px; position:relative; overflow:hidden; }
+.coming-card h4{ font-size:11px; font-weight:800; color:#fff; margin:0 0 8px; display:flex; align-items:center; gap:6px; letter-spacing:.3px; }
+.coming-card ul{ margin:0 0 0 14px; padding:0; }
+.coming-card li{ font-size:10.5px; color:#cfc8e8; line-height:1.6; margin-bottom:2px; }
+.future-cmds{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.future-cmds span{ font-size:10px; font-weight:700; color:#cfc8e8; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); padding:6px 9px; border-radius:999px; line-height:1.3; }
+.evo-note{ text-align:center; font-size:10px; color:#8a8aa3; margin-top:10px; line-height:1.6; padding:10px; border-radius:10px; background:color-mix(in srgb, var(--a1) 6%, transparent); border:1px dashed color-mix(in srgb, var(--a1) 16%, transparent); }
+
 .actions{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:14px; position:relative; z-index:1; }
-.btn{ padding:11px 18px; border-radius:12px; border:none; font-size:12px; font-weight:800; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+.btn{ padding:11px 18px; border-radius:12px; border:none; font-size:12px; font-weight:800; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; transition:transform .12s ease, filter .12s ease; }
+.btn:active{ transform:scale(.97); }
 .btn-primary{ background:linear-gradient(135deg, var(--a1), var(--a2)); color:#0b0818; box-shadow:0 6px 18px color-mix(in srgb, var(--a1) 25%, transparent); }
 .btn-ghost{ background:transparent; border:1px solid var(--border); color:#cfc8e8; }
+.btn-ghost:hover{ border-color:color-mix(in srgb, var(--a1) 30%, var(--border)); background:color-mix(in srgb, var(--a1) 8%, transparent); }
+.shine{ background:linear-gradient(90deg, #fff 0%, var(--a1) 25%, #fff 50%, var(--a2) 75%, #fff 100%); background-size:200% 100%; -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; animation:textShine 3.5s linear infinite; }
+@keyframes textShine{ 0%{background-position:0 50%} 100%{background-position:200% 50%} }
 </style>
 </head>
 <body data-theme="amethyst">
@@ -38,119 +73,255 @@
 <div class="bg-orb orb1"></div>
 <div class="bg-orb orb2"></div>
 <div class="auth-frame guide-frame">
-  <div class="auth-head">
+  <div class="hero-unified shimmer">
     <div class="auth-logo">M U S K U</div>
-    <div class="auth-sub">HOW TO USE — COMPLETE GUIDE</div>
-  </div>
-
-  <div class="hero-mini">
-    <h2>3 Steps me MUSKU Start karo 🚀</h2>
-    <p>Google se login → <b style="color:#fff;">FREE-S2</b> se 7 Din Free → API Key lagao → Baat shuru. Bas itna hi.</p>
-    <div class="hero-badges"><span>🎙️ Live Voice</span><span>💬 Chat</span><span>📜 History</span><span>🎨 17 Borders + 12 Themes</span><span>⚡ Hinglish/Hindi/English</span></div>
+    <div class="auth-sub">HOW TO USE — COMPLETE USER GUIDE</div>
+    <div class="easy-pill">🚀 MUSKU Start Karna <span>Bahut Easy Hai</span></div>
+    <div class="hero-flow">
+      <span class="step">1. Google Sign In</span><span class="arrow">→</span>
+      <span class="step">2. FREE-S2 Activate</span><span class="arrow">→</span>
+      <span class="step">3. API Key Add</span><span class="arrow">→</span>
+      <span class="step" style="background:linear-gradient(135deg, var(--a1), var(--a2)); color:#0b0818; border-color:transparent;">4. START</span>
+    </div>
+    <div class="hero-badges"><span>🎙️ Voice-to-Voice</span><span>💬 Chat</span><span>📜 History</span><span>🧠 Memory</span><span>🌐 Hinglish / Hindi / English</span><span>🎨 12 Themes + 17 Borders</span></div>
   </div>
 
   <div class="steps">
     <!-- 1 -->
     <div class="card">
-      <h3><span class="num">1</span> Sign In — Google se shuru karo</h3>
-      <p><b style="color:#fff;">Continue with Google</b> dabao aur apna Google choose karo. Jaldi try karna hai to <b style="color:#fff;">Skip for now — Guest</b> bhi hai.</p>
-      <div class="tip">💡 <b>Ek Google = Ek Account.</b> Logout karoge to wapas Sign in karna hoga. Guest me bhi FREE-S2 kaam karta hai.</div>
+      <h3><span class="num">1</span> Google se Sign In Karo</h3>
+      <p><b style="color:#fff;">Continue with Google</b> dabao aur apna account select karo.</p>
+      <p style="margin-top:6px;">Jaldi try karna ho to <b style="color:#fff;">Skip for now — Guest</b> bhi use kar sakte ho.</p>
+      <div class="tip">🔐 Google account ke saath tumhara apna MUSKU experience rehta hai.</div>
     </div>
 
     <!-- 2 -->
     <div class="card">
-      <h3><span class="num">2</span> Plan Choose — FREE-S2 vs Pro</h3>
-      <p>Activate page pe Code box me <b style="color:#fff;">FREE-S2</b> likha hoga.</p>
-      <table class="mini-table">
-        <tr><th>Code</th><th>Kya Milega</th><th>Price</th></tr>
-        <tr><td><b style="color:#43e97b;">FREE-S2</b> (exact)</td><td>7 Din Unlimited — Voice + Chat + History</td><td>₹0 <span style="opacity:.6; text-decoration:line-through;">₹199</span> <b style="color:#fde68a;">100% OFF</b></td></tr>
-        <tr><td>Ek bhi letter badla<br><span style="font-size:10px; opacity:.7;">FREE-S2A, FREE-S3, MUSKU-1...</span></td><td>Auto <b>1 Month Basic (₹99)</b> me convert</td><td>₹99 / month</td></tr>
-        <tr><td><b>Pay Now</b> button</td><td>Abhi <b>Work in Progress</b> — popup ayega, payment jald ayega</td><td>—</td></tr>
-      </table>
-      <div class="warn">⚠️ <b>Important:</b> <b style="color:#fff;">Sirf Active Free (FREE-S2) se hi MUSKU load hogi.</b> Pro / Change wala code abhi WIP hai — activate hoga par MUSKU nahi khulegi, wapas Plans pe bhej degi. Sign out karte time agar code change kiya hua hai to auto 1 Month Pro me convert ho jayega.</div>
-      <div class="tip">🎮 <b>One ID = 1 Free Only</b> — FREE-S2 ek device/local storage pe ek baar hi Free. Dobara use karoge to block: <i>"FREE-S2 Already Used"</i>. Clear Data karoge to ye record bhi delete ho jayega.</div>
+      <h3><span class="num">2</span> FREE-S2 Activate Karo</h3>
+      <p>Plans mein <b style="color:#43e97b;">FREE-S2</b> activate karo aur <b style="color:#fff;">7 Days Free</b> Voice + Chat experience lo.</p>
+      <div class="warn">⚠️ Code exactly <b style="color:#fff;">FREE-S2</b> hona chahiye.</div>
+      <div class="tip">💡 <b>Pro / Pay Now abhi Coming Soon hai.</b> Filhal sirf <b style="color:#fff;">FREE-S2 — 7 Days Free</b> available hai.</div>
     </div>
 
     <!-- 3 -->
     <div class="card">
-      <h3><span class="num">3</span> API Key Lagao — Gemini Key</h3>
-      <p>MUSKU open hote hi upar <b style="color:#fff;">ENTER API KEY</b> dikhega → tap karo → Profile khulega → <b>API Key</b> me <b>AIza...</b> paste karo → Save.</p>
-      <p style="margin-top:6px;">Key yahan banao: <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--a2);">aistudio.google.com/app/apikey</a> → Create API key → Copy → MUSKU me paste.</p>
-      <div class="warn">🔒 Key kisi ko share mat karo. Leak hui to bill aapka ayega. MUSKU key ko local me encrypt karke rakhti hai.</div>
-      <div class="tip">⏰ Free 7 din khatam hote hi auto Plans pe bhej degi — naya code se renew karo.</div>
+      <h3><span class="num">3</span> Gemini API Key Add Karo</h3>
+      <p>MUSKU open karne par agar <b style="color:#fff;">ENTER API KEY</b> dikhe:</p>
+      <p style="margin-top:6px;"><b style="color:#fff;">Profile → API Key → Gemini API Key → Save</b></p>
+      <p style="margin-top:6px;">Gemini API Key Google AI Studio se bana sakte ho: <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--a2);">aistudio.google.com/app/apikey</a></p>
+      <div class="warn">🔒 <b>Apni API Key kisi ke saath share mat karo.</b></div>
     </div>
 
-    <!-- Daily Use -->
+    <!-- 4 -->
     <div class="card">
-      <h3>💬 Daily Use — Kaise Baat Karein</h3>
-      <ul>
-        <li><b style="color:#fff;">Voice (Live):</b> Center me <b>START</b> → Mic Allow → bolo — Hinglish / Hindi / English. Beech me rokna ho to <b>"Ruko"</b> bolo.</li>
-        <li><b style="color:#fff;">Chat:</b> Bottom bar → <b>CHAT</b> → type karo, Enter dabao. Voice aur chat dono ka history save hota hai.</li>
-        <li><b style="color:#fff;">History:</b> Bottom bar → <b>HISTORY</b> → calendar se din choose karo, purani baatein dekho.</li>
-        <li><b style="color:#fff;">Theme & Border:</b> Top-right <b>Profile icon (M)</b> → Theme (12) / Border Design (17) → pasand ka lagao.</li>
-        <li><b style="color:#fff;">Language:</b> Profile → Language → Hinglish / Hindi / English. "Hindi me bolo" bolke bhi switch hota hai.</li>
-        <li><b style="color:#fff;">YouTube / Apps:</b> "YouTube kholo", "Gaana chalao", "Notepad kholo" — bolo, MUSKU kar degi.</li>
-      </ul>
-      <div class="ok">✅ Tip: Pehli baar mic block ho to browser ke address bar me 🔒 → Site settings → Microphone → Allow karo, page reload karo.</div>
+      <h3><span class="num">4</span> 🎙️ MUSKU se Baat Karo</h3>
+      <div class="use-grid">
+        <div class="use-item">
+          <span class="ic">🎙️</span>
+          <div><b>Voice-to-Voice</b><span><b style="color:#fff;">START</b> dabao → Microphone Allow karo → normally baat karo.<br>Example: <i>“Hi MUSKU, mujhse Hinglish mein baat karo.”</i> — MUSKU tumhari voice sunti hai aur voice mein reply karti hai.</span></div>
+        </div>
+        <div class="use-item">
+          <span class="ic">💬</span>
+          <div><b>Chat</b><span>Bottom bar → <b style="color:#fff;">CHAT</b> → message type karo → <b style="color:#fff;">Enter</b>.</span></div>
+        </div>
+        <div class="use-item">
+          <span class="ic">📜</span>
+          <div><b>History</b><span>Bottom bar → <b style="color:#fff;">HISTORY</b> → date select karo → previous conversations dekho.</span></div>
+        </div>
+        <div class="use-item">
+          <span class="ic">🌐</span>
+          <div><b>Language</b><span><b style="color:#fff;">Profile → Language</b> → Hinglish / Hindi / English.</span></div>
+        </div>
+        <div class="use-item">
+          <span class="ic">🎨</span>
+          <div><b>Customize</b><span><b style="color:#fff;">Profile → Theme / Border</b> → <b style="color:#fff;">12 Themes + 17 Border Designs</b>.</span></div>
+        </div>
+      </div>
     </div>
 
-    <!-- MUSKU Special -->
-    <div class="card" style="border-color:color-mix(in srgb, var(--a1) 30%, var(--border));">
-      <h3>💜 MUSKU Special — Tumhari Bestie</h3>
-      <ul>
-        <li>MUSKU tumhari <b>bestie-type friend</b> hai — bilkul ek apni khaas dost ki tarah, hamesha tumhara care aur help karegi.</li>
-        <li>Naam hamesha <b>MUSKU</b> hi rahega — change nahi hota.</li>
-        <li>Care wali baatein, yaad-daasht aur daily help — jaise ek real dost.</li>
-        <li>Pet words (jaan / babu) sirf tab use karegi jab tum bologe <b>"jaan bulao"</b>.</li>
-      </ul>
+    <!-- Memory -->
+    <div class="card">
+      <h3>🧠 MUSKU Memory</h3>
+      <p>MUSKU useful preferences aur important information ko future conversations ko personalize karne ke liye yaad rakh sakti hai.</p>
+      <p style="margin-top:6px; font-weight:800; color:#fff; font-size:11px;">Examples:</p>
+      <div class="ex">“Mujhse hamesha Hinglish mein baat karo.”</div>
+      <div class="ex" style="margin-top:6px;">“Mujhe short replies pasand hain.”</div>
+      <div class="tip">💡 <b>Har normal chat permanent memory nahi banti.</b></div>
     </div>
 
-    <!-- Mobile APK (Future) -->
-    <div class="card" style="border-color:color-mix(in srgb, var(--a2) 34%, var(--border));">
-      <h3>📱 MUSKU Mobile (APK) — Jaldi Aa Raha Hai</h3>
-      <p>MUSKU jald hi <b style="color:#fff;">Android APK</b> ke roop me aayegi — phone me bina browser ke direct chalegi, aur yahan jaise hi baat karegi (Voice + Chat + History).</p>
+    <!-- Bestie -->
+    <div class="card" style="border-color:color-mix(in srgb, var(--a1) 28%, var(--border));">
+      <h3>💜 MUSKU Bestie Experience</h3>
+      <p>MUSKU ke saath:</p>
       <ul>
-        <li><b style="color:#fff;">Device Control:</b> "Settings kholo", "Brightness badhao", "WiFi on karo", "Alarm lagao", "Torch jalao" — phone ke settings & hardware voice se control.</li>
-        <li><b style="color:#fff;">Apps Control:</b> "YouTube kholo", "WhatsApp message bhejo", "Call karo", "Notepad likho", "Gaana chalao" — installed apps direct chalein.</li>
-        <li><b style="color:#fff;">Cross-Device Sync:</b> Desktop (Windows) aur Mobile dono me ek hi Google account + chat history auto sync rahegi.</li>
-        <li><b style="color:#fff;">Future Scope:</b> Smart home / IoT device control, file manager, reminders & automation — "MUSKU sab kar degi".</li>
+        <li>💬 Baat karo</li>
+        <li>❓ Questions poochho</li>
+        <li>💡 Ideas lo</li>
+        <li>📝 Writing mein help lo</li>
+        <li>📋 Planning karo</li>
+        <li>🧠 Topics samjho</li>
+        <li>🎓 Kuch naya seekho</li>
       </ul>
-      <div class="tip">🚀 <b>Abhi:</b> Windows desktop app me enjoy karo. Mobile APK launch hote hi yahan notify karenge — tab tak FREE-S2 se shuru karo.</div>
+      <div class="tip">💜 <b>Pet names</b> jaise <i>jaan / babu</i> tabhi use honge jab tum explicitly bolo.</div>
     </div>
 
-    <!-- Dhyaan do -->
-    <div class="card" style="border-color:rgba(255,23,68,.28);">
-      <h3>⚠️ Dhyaan Do — Data & Privacy</h3>
-      <ul>
-        <li>Browser ka <b>Clear Data / Clear Cache</b> karoge to MUSKU ke chats, plan, FREE-S2 record sab delete ho jayega.</li>
-        <li>Ek hi <b>FREE-S2</b> dobara use nahi — block ho jayega. Naya ID chahiye to Code change karo (Pro me convert).</li>
-        <li>Mic ko Windows Settings → Privacy → Microphone me block mat karo.</li>
-        <li>Plan sirf isi browser me save hota hai (localStorage) — dusre browser/phone me alag se activate karna hoga.</li>
-      </ul>
+    <!-- Current Web -->
+    <div class="card" style="border-color:rgba(255,23,68,.22);">
+      <h3>🌐 CURRENT MUSKU WEB</h3>
+      <p>Abhi MUSKU Web ka main experience <b style="color:#fff;">Voice-to-Voice + Chat AI assistant</b> hai.</p>
+      <p style="margin-top:10px; font-weight:800; color:#fff;">❌ Abhi Available Nahi Hai</p>
+      <div class="chip-row" style="margin-top:8px;">
+        <span class="chip chip-no">❌ Apps control</span>
+        <span class="chip chip-no">❌ Phone control</span>
+        <span class="chip chip-no">❌ Windows control</span>
+        <span class="chip chip-no">❌ WhatsApp actions</span>
+        <span class="chip chip-no">❌ File management</span>
+        <span class="chip chip-no">❌ Reminders / automation</span>
+        <span class="chip chip-no">❌ AI image generation</span>
+        <span class="chip chip-no">❌ PDF / document creation</span>
+      </div>
+    </div>
+
+    <!-- Coming Soon -->
+    <div class="card" style="border-color:color-mix(in srgb, var(--a2) 30%, var(--border));">
+      <h3>🚀 COMING SOON — MUSKU AI EVOLUTION</h3>
+      <p>Future MUSKU ka goal sirf baat karna nahi, balki ek <b style="color:#fff;">powerful personal AI assistant</b> banna hai.</p>
+
+      <div class="coming-grid">
+        <div class="coming-card">
+          <h4>🎨 AI Creation</h4>
+          <ul>
+            <li>🖼️ AI Image Generation & Editing</li>
+            <li>📄 PDF Creation & Analysis</li>
+            <li>📑 Documents & Presentations</li>
+            <li>✍️ Advanced Writing & Content</li>
+            <li>📊 Excel / CSV & Data Analysis</li>
+          </ul>
+        </div>
+        <div class="coming-card">
+          <h4>👁️ AI Vision</h4>
+          <ul>
+            <li>📸 Image Understanding</li>
+            <li>🖥️ Screen Understanding</li>
+            <li>📷 Camera Assistance</li>
+            <li>🔎 Visual Analysis</li>
+          </ul>
+        </div>
+        <div class="coming-card">
+          <h4>🌐 AI Web & Research</h4>
+          <ul>
+            <li>🔍 Web Search & Research</li>
+            <li>🌐 Browser Assistance</li>
+            <li>📚 Research & Summarization</li>
+            <li>🧾 Information Extraction</li>
+          </ul>
+        </div>
+        <div class="coming-card">
+          <h4>🧠 Personal Intelligence</h4>
+          <ul>
+            <li>🧠 Advanced Personal Memory</li>
+            <li>💭 Better Context Understanding</li>
+            <li>🎯 Personalized AI Experience</li>
+            <li>🎓 Study & Learning Mode</li>
+          </ul>
+        </div>
+        <div class="coming-card">
+          <h4>💻 Device & Automation</h4>
+          <ul>
+            <li>💻 Computer & App Control</li>
+            <li>📱 Phone & App Control</li>
+            <li>📁 File Assistance</li>
+            <li>⏰ Reminders & Tasks</li>
+            <li>🔔 Notifications</li>
+            <li>🤖 AI Automation</li>
+            <li>🏠 Smart Home / IoT</li>
+          </ul>
+        </div>
+        <div class="coming-card">
+          <h4>🔄 Connected Experience</h4>
+          <ul>
+            <li>🔄 Cross-Device Sync</li>
+            <li>🌐 Web + Android + Future Desktop</li>
+            <li>🔐 Privacy & Permission Controls</li>
+          </ul>
+        </div>
+      </div>
+
+      <p style="margin-top:12px; font-weight:800; color:#fff; font-size:11px;">💡 Example Future Commands</p>
+      <div class="future-cmds">
+        <span>“YouTube kholo.”</span>
+        <span>“Meri PDF summarize karo.”</span>
+        <span>“Is image ko edit karo.”</span>
+        <span>“Mere liye presentation bana do.”</span>
+        <span>“Kal mujhe yaad dilana.”</span>
+        <span>“Is topic par research karke samjhao.”</span>
+        <span>“Mere computer par ye file open karo.”</span>
+      </div>
+      <div class="evo-note">🚀 Features gradually release honge jab ready, reliable aur safe honge.</div>
     </div>
 
     <!-- Quick Fix -->
     <div class="card">
-      <h3>🛠️ Problem? Quick Fix</h3>
+      <h3>🛠️ QUICK FIX</h3>
       <ul>
-        <li><b>MUSKU nahi khul rahi, Plans pe bhej rahi?</b> → Check karo Plan <b style="color:#43e97b;">Active Free</b> hai ya nahi. Pro / Expired hai to Plans pe hi rahegi (Only Free loads).</li>
-        <li><b>Mic nahi chal raha?</b> → Mic Allow karo + Windows mic on rakho + page reload.</li>
-        <li><b>API Key error?</b> → Key sahi copy hui? <code>AIza...</code> se start honi chahiye. Profile me dobara paste karo.</li>
-        <li><b>Pay Now dabane se kuch nahi?</b> → Ye normal hai — <b>Work in Progress</b> popup hi ayega. Abhi sirf FREE-S2 use karo.</li>
+        <li><b>🎙️ Mic nahi chal raha?</b> Microphone → <b>Allow</b> → Page Reload.</li>
+        <li><b>🔑 API Error?</b> Profile → API Key → Key check karke dobara Save karo.</li>
+        <li><b>🔒 MUSKU Plans par bhej rahi hai?</b> Check karo ki <b style="color:#43e97b;">FREE-S2 Active</b> hai.</li>
+        <li><b>📜 History gayab hai?</b> Browser ka <b>Clear Site Data</b> karne se local history delete ho sakti hai.</li>
       </ul>
+    </div>
+
+    <!-- Start Talking -->
+    <div class="hero-mini" style="margin-top:4px;">
+      <h2>💜 START TALKING</h2>
+      <p class="sub"><b style="color:#fff;">Sign In → FREE-S2 → API Key → START</b></p>
+      <p class="sub" style="margin-top:6px; color:var(--a2); font-weight:800; letter-spacing:.5px;">MUSKU — Talk. Ask. Create. Remember. 💜</p>
     </div>
   </div>
 
   <div class="actions">
-    <a href="signup.html" class="btn btn-primary">← Sign in</a>
-    <a href="activate.html" class="btn btn-ghost">Plans →</a>
-    <a href="index.html" class="btn btn-ghost">Open App</a>
+    <a href="signup.html" class="btn btn-primary" id="howSignIn">← Sign In</a>
+    <a href="activate.html?upgrade=1" class="btn btn-ghost" id="howPlans">Plans →</a>
+    <a href="index.html" class="btn btn-ghost" id="howOpenApp">Open App</a>
   </div>
 
-  <div class="auth-foot">© 2026 MUSKU AI • Free: FREE-S2 = 7 Din • Pro: Pay Now WIP • Sirf Active Free se MUSKU load</div>
+  <div class="auth-foot">© 2026 MUSKU AI</div>
 </div>
 </div><!-- /#mFrame -->
 <script>
+// How-to-use actions — instant redirect based on local auth (no Firebase wait)
+(function(){
+  function go(href){ try{ location.href=href; }catch(e){ location.replace(href); } }
+  var s=document.getElementById("howSignIn");
+  var p=document.getElementById("howPlans");
+  var o=document.getElementById("howOpenApp");
+  if(s) s.addEventListener("click", function(e){
+    try{
+      var u=JSON.parse(localStorage.getItem("musku_auth_user")||"null");
+      if(u && u.provider==="google"){
+        var pl=null; try{ var per=localStorage.getItem("musku_activate_plan_"+u.uid); if(per) pl=JSON.parse(per); else pl=JSON.parse(localStorage.getItem("musku_activate_plan")||"null"); }catch(e){}
+        var active=false; try{ if(pl && pl.type==="free" && pl.until){ var exp=new Date(pl.until).getTime(); if(pl.until.indexOf("T")===-1) exp+=86400000-1000; active=exp>Date.now(); } else if(pl && pl.type==="free") active=true; }catch(e){}
+        if(active){ e.preventDefault(); go("index.html"); return; }
+        e.preventDefault(); go("activate.html?upgrade=1"); return;
+      }
+    }catch(e){}
+  });
+  if(p) p.addEventListener("click", function(e){
+    try{
+      var u2=JSON.parse(localStorage.getItem("musku_auth_user")||"null");
+      if(!u2){ e.preventDefault(); go("signup.html"); return; }
+    }catch(e){}
+  });
+  if(o) o.addEventListener("click", function(e){
+    try{
+      var u3=JSON.parse(localStorage.getItem("musku_auth_user")||"null");
+      if(!u3){ e.preventDefault(); go("signup.html"); return; }
+      var pl3=null; try{ var per3=localStorage.getItem("musku_activate_plan_"+u3.uid); if(per3) pl3=JSON.parse(per3); else pl3=JSON.parse(localStorage.getItem("musku_activate_plan")||"null"); }catch(e){}
+      var act3=false; try{ if(pl3 && pl3.type==="free" && pl3.until){ var exp3=new Date(pl3.until).getTime(); if(pl3.until.indexOf("T")===-1) exp3+=86400000-1000; act3=exp3>Date.now(); } else if(pl3 && pl3.type==="free") act3=true; }catch(e){}
+      if(!act3){ e.preventDefault(); go("activate.html"); return; }
+    }catch(e){}
+  });
+})();
 // Auto theme every 3s — all 12 themes 1-by-1
 (function(){
   var themes=["amethyst","oceanic","obsidian","emerald","monochrome","crimson","sunset","golden","cyberpunk","aurora","holographic","chrome"];

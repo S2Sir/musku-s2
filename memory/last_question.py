@@ -104,13 +104,13 @@ def detect_previous_question_request(user_text):
     return False
 
 
-def get_last_question():
+def get_last_question(uid=None):
     """Turn-context se last USER question wapas (fallback: recent turns ring).
     Sirf sawal jaisa last message hi return hota hai — commands ('gaana chalao')
     kabhi previous-question nahi banenge. Agar last_user koi command hai (empty
-    nahi), to purane ring se hijack nahi karte."""
+    nahi), to purane ring se hijack nahi karte. Per-user scoped."""
     try:
-        snap = turn_context.snapshot()
+        snap = turn_context.snapshot(uid)
         last_user = (snap.get("last_user") or "").strip()
     except Exception:
         last_user = ""
@@ -143,12 +143,12 @@ def build_previous_question_instruction(last_question):
     return block
 
 
-def get_last_reply():
+def get_last_reply(uid=None):
     """Musku ka last spoken reply (complete ya interrupted partial) — verbatim
     repeat ke liye. turn_context.last_musku se aata hai — wahi text jo beech me
-    ruk gayi thi ya poora bola gaya."""
+    ruk gayi thi ya poora bola gaya. Per-user scoped."""
     try:
-        snap = turn_context.snapshot()
+        snap = turn_context.snapshot(uid)
         return (snap.get("last_musku") or "").strip()[:800]
     except Exception:
         return ""

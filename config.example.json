@@ -1,0 +1,21 @@
+{
+  "user_name": "S2",
+  "gemini_api_key": "REPLACE_WITH_YOUR_GEMINI_KEY_OR_LEAVE_EMPTY_FOR_ENV",
+  "google_search_key": "",
+  "google_cx": "",
+  "language": "hinglish",
+  "musku_voice": "Aoede",
+  "musku_voice_gain": 1.8,
+  "duck_volume": false,
+  "duck_level": 15,
+  "audio_ducking": {
+    "enabled": true,
+    "duck_level": 0.1
+  },
+  "smart_router_enabled": true,
+  "smart_router_dry_run": false,
+  "ui_settings": {
+    "theme": "crimson",
+    "design": "energy"
+  }
+}

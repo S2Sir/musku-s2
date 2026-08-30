@@ -37,7 +37,7 @@ def _load_grammar_fixes():
     if _GRAMMAR_FIXES is None:
         try:
             path = os.path.join(DATA_DIR, "grammar_fixes.json")
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8-sig") as f:
                 _GRAMMAR_FIXES = json.load(f)
         except Exception as e:
             print(f"[Grammar Fixes Load Error]: {e}")

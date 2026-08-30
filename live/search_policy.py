@@ -70,8 +70,8 @@ def build_browser_search_tool_output(query: str, tool_result: str) -> dict:
     else:
         instruction = (
             "Browser search SUCCESS. Chrome me Google khul gaya. Pehle short confirm: "
-            "'Haan boss, maine Google pe search kar diya — browser me khul gaya.' "
-            "Phir apni knowledge se 2-4 Roman Hinglish sentences me topic samjhao (aap + Boss). "
+            "'Haan, maine Google pe search kar diya — browser me khul gaya.' "
+            "Phir apni knowledge se 2-4 Roman Hinglish sentences me topic samjhao, pyaar se aap se baat karo. "
             "Scraped text mat padho — knowledge se explain karo. Sorry/gadbad mat bolo. "
             "'Kya jaanna chahte hain' mat puchho."
         )

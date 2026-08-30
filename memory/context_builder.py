@@ -18,7 +18,7 @@ class ContextBuilder:
         logger.info("Building system prompt with L0/L1 memory")
         
         # L0 Memory
-        l0_memory = "Boss Name: S2Sir\nCore Preferences: Fast responses, professional"
+        l0_memory = "User Name: aap\nCore Preferences: Fast responses, warm and caring"
         
         # L1 Memory
         l1_memory = "Active Tasks: Finish architecture migration"

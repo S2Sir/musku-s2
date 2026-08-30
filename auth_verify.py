@@ -127,20 +127,37 @@ def verify_id_token(token: str) -> str:
     return uid
 
 
+def _firebase_available() -> bool:
+    """True only when the Firebase Admin SDK is importable (i.e. Firebase is
+    actually configured for this deployment). Local dev without firebase_admin
+    has no way to verify tokens, so we must fall back to the client uid there."""
+    try:
+        import firebase_admin  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
 def resolve_verified_uid(token: str | None, client_uid: str | None = None) -> str | None:
     """Return the verified uid, or None if auth is required and missing/invalid.
 
     Security: the verified uid (never the client-supplied `client_uid`) is what
-    callers should use for storage scoping. In local-dev mode (REQUIRE_AUTH off)
-    we fall back to trusting `client_uid`.
+    callers should use for storage scoping. When a token IS present it MUST verify
+    (production, where firebase_admin is installed). When Firebase is NOT
+    configured (local dev — no firebase_admin), a missing OR stale/expired token
+    must NOT block the Live voice WebSocket, so we fall back to the client uid.
+    This stops the browser's stale cached idToken from causing an unauthorized
+    reject → reconnect loop.
     """
     if token:
         try:
             return verify_id_token(token)
         except Exception as e:  # noqa: BLE001
-            logger.warning("Firebase token verify failed: %s", e)
+            logger.debug("Firebase token verify failed: %s", e)
             if require_auth():
                 return None
+            return client_uid
+    # No token
     if require_auth():
         return None
     return client_uid

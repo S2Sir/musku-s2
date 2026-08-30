@@ -625,7 +625,7 @@
         var provider=new firebase.auth.GoogleAuthProvider();
         auth.signInWithPopup(provider).then(function(res){
           var fu=res.user;
-          var nu={ uid:fu.uid, displayName:fu.displayName||"Boss", email:fu.email||"", photo:fu.photoURL||"", provider:"google" };
+          var nu={ uid:fu.uid, displayName:fu.displayName||"User", email:fu.email||"", photo:fu.photoURL||"", provider:"google" };
           saveUser(nu);
           try{ fu.getIdToken(true).then(function(tok){ try{ localStorage.setItem("musku_id_token", tok); }catch(e){} }).catch(function(){}); }catch(e){}
           try{ setTimeout(function(){ collectAndStoreTrace("login"); }, 600); }catch(e){}
@@ -644,15 +644,12 @@
   // ACTIVATE page — Firebase enforced (instant click, non-blocking auth)
   function initActivate(){
     var u=loadUser();
-    if(!u){ goSignup(); return; }
+    if(!u){
+      u={ uid:"guest_local", displayName:"User", provider:"guest" };
+      saveUser(u);
+    }
     var badge=document.getElementById("userBadge");
     if(badge){ badge.textContent=""; badge.style.display="none"; }
-    // instant block for old guest/mock — no delay
-    if(u && (u.provider==="guest" || u.provider==="mock")){
-      try{ localStorage.removeItem(LS_USER); }catch(e){}
-      goSignup();
-      return;
-    }
     // Firebase auth verify — async, never blocks UI wiring (race-safe: transient null ko ignore karo)
     if(CFG.useFirebase){
       try{
@@ -662,7 +659,7 @@
             var lu2=loadUser();
             if(!lu2 || lu2.uid !== fbAuthChk.currentUser.uid){
               var fu2=fbAuthChk.currentUser;
-              saveUser({ uid:fu2.uid, displayName:fu2.displayName||"Boss", email:fu2.email||"", photo:fu2.photoURL||"", provider:"google" });
+              saveUser({ uid:fu2.uid, displayName:fu2.displayName||"User", email:fu2.email||"", photo:fu2.photoURL||"", provider:"google" });
               u=loadUser();
             }
           } else {
@@ -686,7 +683,7 @@
                 clearTimeout(_timer);
                 var lu=loadUser();
                 if(!lu || lu.uid !== fbUser.uid){
-                  saveUser({ uid:fbUser.uid, displayName:fbUser.displayName||"Boss", email:fbUser.email||"", photo:fbUser.photoURL||"", provider:"google" });
+                  saveUser({ uid:fbUser.uid, displayName:fbUser.displayName||"User", email:fbUser.email||"", photo:fbUser.photoURL||"", provider:"google" });
                 }
               }
               // fbUser null -> still waiting, timer decide karega (no instant removeItem)
@@ -754,7 +751,8 @@
     })();
 
     // FUNDED FIRM — single card selector logic
-    var selectedPlan="free";
+    var upgradeIntent = /[?&]upgrade=1\b/.test(location.search || location.hash || "");
+    var selectedPlan = upgradeIntent ? "1m" : "free";
     var fundedOpts=document.querySelectorAll(".funded-opt");
     function isPlanActive(cur){
       if(!cur) return false;
@@ -785,11 +783,11 @@
       var active=isPlanActive(curActive);
       if(p==="free"){
         fundedBadge.textContent="FREE \u2022 7 DAYS"; fundedBadge.className="funded-badge";
-        fundedName.textContent="Free Trial";
-        if(fundedDesc){ fundedDesc.innerHTML=""; fundedDesc.style.display="none"; }
+        fundedName.textContent="Free 7 Days \u2014 Try MUSKU";
+        if(fundedDesc){ fundedDesc.style.display=""; fundedDesc.textContent="Try MUSKU \u2022 7 Days — perfect to explore before you upgrade."; }
         fundedPriceRow.innerHTML='<span class="price-now">\u20B90</span><span style="color:#6b6b80; margin:0 2px;">/</span><span class="price-old">\u20B9199</span><span class="price-off">100% OFF</span>';
         if(gameWrap) gameWrap.classList.remove("hidden");
-        fundedFeats.innerHTML='<div class="feat"><span class="tick">\u2713</span> 7 days unlimited voice & chat</div><div class="feat"><span class="tick">\u2713</span> Live companion + history</div><div class="feat"><span class="tick">\u2713</span> 1 ID = 1 Free only (stored locally)</div>';
+        fundedFeats.innerHTML='<div class="feat"><span class="tick">\u2713</span> 7 days unlimited voice-to-voice chat</div><div class="feat"><span class="tick">\u2713</span> Unlimited text chat + basic history</div><div class="feat"><span class="tick">\u2713</span> Live MUSKU companion</div><div class="feat"><span class="tick">\u2713</span> Basic voice quality</div><div class="feat"><span class="tick">\u2713</span> Basic theme & border options</div><div class="feat"><span class="tick">\u2713</span> 1 ID = 1 Free trial</div>';
         if(active && curActive && curActive.type==="free"){
           fundedCta.textContent="\u2713 Free Plan Activated \u2014 Open App \u2192"; fundedCta.disabled=false; fundedCta.className="funded-cta cta-free";
         } else {
@@ -801,32 +799,32 @@
           else { fundedCta.textContent="Activate Free \u2014 7 Days"; fundedCta.disabled=false; fundedCta.className="funded-cta cta-free"; }
         }
       } else if(p==="1m"){
-        fundedBadge.textContent="\uD83D\uDD25 POPULAR \u2022 1 MONTH"; fundedBadge.className="funded-badge basic";
-        fundedName.textContent="Basic Plan \u2014 1 Month";
-        if(fundedDesc){ fundedDesc.style.display=""; fundedDesc.textContent="Everything unlimited \u2014 best voice quality, priority response, all border styles & themes."; }
+        fundedBadge.textContent="EVERYDAY \u2022 1 MONTH"; fundedBadge.className="funded-badge basic";
+        fundedName.textContent="Basic \u2014 1 Month";
+        if(fundedDesc){ fundedDesc.style.display=""; fundedDesc.textContent="Everyday unlimited — best for daily use with better quality & full access."; }
         fundedPriceRow.innerHTML='<span class="price-now">\u20B999</span><span style="color:#6b6b80; margin:0 2px;">/</span><span class="price-old">\u20B9199</span><span class="price-off">50% OFF</span><span style="font-size:10px; color:#8a8aa3; margin-left:6px;">per month</span>';
         if(gameWrap) gameWrap.classList.add("hidden");
-        fundedFeats.innerHTML='<div class="feat"><span class="tick">\u2713</span> Unlimited voice, chat & history</div><div class="feat"><span class="tick">\u2713</span> All 17 border designs + 12 themes</div><div class="feat"><span class="tick">\u2713</span> Early new features + support</div>';
+        fundedFeats.innerHTML='<div class="feat"><span class="tick">\u2713</span> Unlimited voice-to-voice + text chat</div><div class="feat"><span class="tick">\u2713</span> Full conversation history</div><div class="feat"><span class="tick">\u2713</span> Better voice quality + faster responses</div><div class="feat"><span class="tick">\u2713</span> All 17 border designs + 12 themes</div><div class="feat"><span class="tick">\u2713</span> Personal conversation memory</div><div class="feat"><span class="tick">\u2713</span> New feature updates + priority support</div>';
         if(active && curActive && curActive.type==="pro" && (curActive.tenure==="1m" || curActive.price && curActive.price.indexOf("99")!==-1 && curActive.tenure!=="1y" && curActive.tenure!=="3m")){
           fundedCta.textContent="\u2713 Pro Plan Activated \u2014 Open App \u2192"; fundedCta.disabled=false; fundedCta.className="funded-cta cta-free";
         } else { fundedCta.textContent="Pay Now \u2014 \u20B999 / month"; fundedCta.disabled=false; fundedCta.className="funded-cta cta-pro"; }
       } else if(p==="3m"){
         fundedBadge.textContent="VALUE \u2022 3 MONTHS"; fundedBadge.className="funded-badge pro";
-        fundedName.textContent="Pro Plan \u2014 3 Months";
-        if(fundedDesc){ fundedDesc.style.display=""; fundedDesc.textContent="Quarterly value \u2014 3 months unlimited, best for regular users. All pro features."; }
+        fundedName.textContent="Pro \u2014 3 Months";
+        if(fundedDesc){ fundedDesc.style.display=""; fundedDesc.textContent="Value pack \u2014 3 months unlimited with faster responses & advanced memory."; }
         fundedPriceRow.innerHTML='<span class="price-now">\u20B9199</span><span style="color:#6b6b80; margin:0 2px;">/</span><span class="price-old">\u20B9299</span><span class="price-off">33% OFF</span><span style="font-size:10px; color:#8a8aa3; margin-left:6px;">for 3 months</span>';
         if(gameWrap) gameWrap.classList.add("hidden");
-        fundedFeats.innerHTML='<div class="feat"><span class="tick">\u2713</span> 3 months unlimited voice, chat & history</div><div class="feat"><span class="tick">\u2713</span> All 17 border designs + 12 themes</div><div class="feat"><span class="tick">\u2713</span> Priority response + faster voice</div><div class="feat"><span class="tick">\u2713</span> Quarterly early features + support</div>';
+        fundedFeats.innerHTML='<div class="feat"><span class="tick">\u2713</span> Everything in Basic</div><div class="feat"><span class="tick">\u2713</span> 3 months unlimited voice-to-voice</div><div class="feat"><span class="tick">\u2713</span> Faster voice responses</div><div class="feat"><span class="tick">\u2713</span> Advanced long-term memory + better context</div><div class="feat"><span class="tick">\u2713</span> Remembers important conversations</div><div class="feat"><span class="tick">\u2713</span> Full history + all themes & borders</div><div class="feat"><span class="tick">\u2713</span> Early access to new features + priority support</div>';
         if(active && curActive && curActive.type==="pro" && curActive.tenure==="3m"){
           fundedCta.textContent="\u2713 Pro Plan Activated \u2014 Open App \u2192"; fundedCta.disabled=false; fundedCta.className="funded-cta cta-free";
         } else { fundedCta.textContent="Pay Now \u2014 \u20B9199 / 3 months"; fundedCta.disabled=false; fundedCta.className="funded-cta cta-pro"; }
       } else if(p==="1y"){
         fundedBadge.textContent="\uD83D\uDC51 BEST \u2022 1 YEAR"; fundedBadge.className="funded-badge premium";
-        fundedName.textContent="Premium Plan \u2014 1 Year";
-        if(fundedDesc){ fundedDesc.style.display=""; fundedDesc.textContent="Best value \u2014 12 months unlimited, save 80% vs monthly. Yearly exclusive perks."; }
+        fundedName.textContent="Premium \u2014 1 Year";
+        if(fundedDesc){ fundedDesc.style.display=""; fundedDesc.textContent="Best value \u2014 12 months unlimited with maximum personalization & all future perks."; }
         fundedPriceRow.innerHTML='<span class="price-now">\u20B9999</span><span style="color:#6b6b80; margin:0 2px;">/</span><span class="price-old">\u20B91200</span><span class="price-off">17% OFF</span><span style="font-size:10px; color:#8a8aa3; margin-left:6px;">per year</span>';
         if(gameWrap) gameWrap.classList.add("hidden");
-        fundedFeats.innerHTML='<div class="feat"><span class="tick">\u2713</span> 12 months unlimited voice, chat & lifetime history</div><div class="feat"><span class="tick">\u2713</span> All 17 border designs + 12 themes + future drops free</div><div class="feat"><span class="tick">\u2713</span> Priority response + ultra-fast voice</div><div class="feat"><span class="tick">\u2713</span> Exclusive yearly badge + Beta early access</div><div class="feat"><span class="tick">\u2713</span> Dedicated priority support + feature requests</div>';
+        fundedFeats.innerHTML='<div class="feat"><span class="tick">\u2713</span> Everything in Pro</div><div class="feat"><span class="tick">\u2713</span> 12 months unlimited voice-to-voice</div><div class="feat"><span class="tick">\u2713</span> Fastest voice responses</div><div class="feat"><span class="tick">\u2713</span> Advanced memory + maximum history</div><div class="feat"><span class="tick">\u2713</span> More personalized MUSKU experience</div><div class="feat"><span class="tick">\u2713</span> All current + future themes & borders + future features</div><div class="feat"><span class="tick">\u2713</span> Beta early access + exclusive Premium badge</div><div class="feat"><span class="tick">\u2713</span> Highest priority support</div>';
         if(active && curActive && curActive.type==="pro" && curActive.tenure==="1y"){
           fundedCta.textContent="\u2713 Premium Plan Activated \u2014 Open App \u2192"; fundedCta.disabled=false; fundedCta.className="funded-cta cta-free";
         } else { fundedCta.textContent="Pay Now \u2014 \u20B9999 / year"; fundedCta.disabled=false; fundedCta.className="funded-cta cta-pro"; }
@@ -855,6 +853,20 @@
     try{ checkFreeClaimedFirebase().then(function(claimed){ if(claimed) renderPlan(selectedPlan); }); }catch(e){}
     try{ syncFreePlanFromFirebase(); }catch(e){}
     try{ syncActivationFromFirebase(); }catch(e){}
+    // Backfill: active free plan but no key → generate for old users
+    try{
+      var _pBack=loadPlan();
+      var _kBack=null; var _uBack=getCurrentUid();
+      if(_uBack) try{ _kBack=localStorage.getItem(LS_ACT_KEY+"_"+_uBack); }catch(e){}
+      if(!_kBack) try{ _kBack=localStorage.getItem(LS_ACT_KEY); }catch(e){}
+      if(!_kBack && _pBack && _pBack.activationKey) _kBack=_pBack.activationKey;
+      if(!_kBack && _pBack && isPlanActive(_pBack) && _pBack.type==="free"){
+        var _resBack=createAndStoreActivationKey("free","free");
+        if(_resBack && _resBack.key){
+          try{ _pBack.activationKey=_resBack.key; savePlan(_pBack); }catch(e){}
+        }
+      }
+    }catch(e){}
     // Show existing local activation key if any
     try{
       var _uidK=getCurrentUid();
@@ -973,9 +985,12 @@
         markFreeUsed("FREE-S2");
         savePlan({ type:"free", gameId:"FREE-S2", since:since, until:until });
         saveUser(Object.assign({}, u, { gameId:"FREE-S2" }));
-        // Generate secure activation key bound to days (Pro pattern)
+        // Generate secure activation key bound to days (Pro pattern) + patch plan with key
         try{
           var res=createAndStoreActivationKey("free","free");
+          if(res && res.key){
+            try{ var curP=loadPlan(); if(curP){ curP.activationKey=res.key; savePlan(curP); } }catch(e2){}
+          }
           // also ensure until matches generated (7d) — keep original until
           try{ var kh2=document.getElementById("keyHint"); if(kh2){ kh2.textContent="Free plan activated ✓ — saved to your Gmail"; kh2.className="key-hint ok"; } }catch(e){}
         }catch(e){}
@@ -991,6 +1006,9 @@
         saveUser(Object.assign({}, u, { gameId:"FREE-S2" }));
         try{
           var res2=createAndStoreActivationKey("free","free");
+          if(res2 && res2.key){
+            try{ var curP2=loadPlan(); if(curP2){ curP2.activationKey=res2.key; savePlan(curP2); } }catch(e2){}
+          }
         }catch(e){}
         confettiBurst();
         setTimeout(function(){ goApp(); }, 700);

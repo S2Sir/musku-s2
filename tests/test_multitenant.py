@@ -121,7 +121,7 @@ class TestLiveSessionRouting(unittest.TestCase):
                 calls.append((self.name, "cli:" + text))
             async def send_proactive_prompt(self, text):
                 calls.append((self.name, "pro:" + text))
-            async def send_greeting(self):
+            async def send_greeting(self, script=None, force=False):
                 calls.append((self.name, "greet"))
             async def update_system_prompt(self, p):
                 calls.append((self.name, "sys:" + p))

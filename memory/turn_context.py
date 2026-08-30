@@ -1,4 +1,8 @@
 # memory/turn_context.py — Last turn link: paheli/sawal ↔ user jawab match (persisted).
+#
+# MULTI-TENANT: state is strictly UID-scoped. Each user gets its own
+# turn_context.json under their data dir and an in-memory cache entry. There is
+# NO process-global turn state — User A's last reply can never leak to User B.
 import json
 import os
 import re
@@ -6,9 +10,15 @@ import threading
 from datetime import datetime
 
 from . import paths
+from tenant_ctx import safe_uid, get_uid
 
-_LOCK = threading.Lock()
-_STATE_FILE = os.path.join(paths.DATA_DIR, "turn_context.json")
+_LOCK = threading.RLock()
+_CACHE = {}  # uid -> state dict (per-user in-memory cache)
+
+
+def _state_file(uid=None):
+    """Per-user turn-context file path (resolves under the user's data dir)."""
+    return os.path.join(paths._data_dir(uid), "turn_context.json")
 
 RIDDLE_HINTS = (
     "paheli", "pahali", "puzzle", "riddle", "quiz", "guess karo", "guess kro",
@@ -54,26 +64,41 @@ def _default_state():
     }
 
 
-def _load():
+def _uid(uid):
+    return safe_uid(uid if uid is not None else get_uid())
+
+
+def _load(uid=None):
+    u = _uid(uid)
+    with _LOCK:
+        if u in _CACHE:
+            return _CACHE[u]
+    data = None
     try:
-        if os.path.exists(_STATE_FILE):
-            with open(_STATE_FILE, "r", encoding="utf-8") as f:
+        sf = _state_file(u)
+        if os.path.exists(sf):
+            with open(sf, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            if isinstance(data, dict):
-                base = _default_state()
-                base.update(data)
-                return base
     except Exception:
-        pass
-    return _default_state()
+        data = None
+    base = _default_state()
+    if isinstance(data, dict):
+        base.update(data)
+    with _LOCK:
+        _CACHE[u] = base
+    return base
 
 
-def _save(state):
+def _save(state, uid=None):
+    u = _uid(uid)
     try:
-        os.makedirs(paths.DATA_DIR, exist_ok=True)
+        sf = _state_file(u)
+        os.makedirs(os.path.dirname(sf), exist_ok=True)
         state["updated_at"] = _now()
-        with open(_STATE_FILE, "w", encoding="utf-8") as f:
+        with open(sf, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2, ensure_ascii=False)
+        with _LOCK:
+            _CACHE[u] = state
     except Exception as e:
         print(f"[TurnContext Save Error]: {e}")
 
@@ -115,42 +140,42 @@ def _update_correct_streak(current, musku_reply):
     return int(current)
 
 
-def record_last_user_message(user_text):
+def record_last_user_message(user_text, uid=None):
     """User jaise hi bolta hai (speech final), turant last_user save karo.
     Turn complete hone ka wait nahi — taaki bich me cut hua sawal bhi yaad rahe.
-    Pending paheli/sawal state ko disturb nahi karta."""
+    Pending paheli/sawal state ko disturb nahi karta. Per-user scoped."""
     user_text = (user_text or "").strip()
     if not user_text:
         return
     with _LOCK:
-        state = _load()
+        state = _load(uid)
         state["last_user"] = user_text[:500]
-        _save(state)
+        _save(state, uid)
 
 
-def record_last_musku_reply(reply):
+def record_last_musku_reply(reply, uid=None):
     """Musku ka last spoken reply save karo (complete ya interrupted/partial) —
     taaki 'ha batao' / 'aage batao' / 'continue karo' par wahi text verbatim
     repeat ho. Turn complete hone ka wait nahi karta — bich me ruka reply bhi
-    yaad rahe."""
+    yaad rahe. Per-user scoped."""
     reply = (reply or "").strip()
     if not reply:
         return
     with _LOCK:
-        state = _load()
+        state = _load(uid)
         state["last_musku"] = reply[:800]
-        _save(state)
+        _save(state, uid)
 
 
-def update_after_turn(user_text, musku_reply):
-    """Har saved turn ke baad — pending paheli/sawal track karo."""
+def update_after_turn(user_text, musku_reply, uid=None):
+    """Har saved turn ke baad — pending paheli/sawal track karo. Per-user scoped."""
     user_text = (user_text or "").strip()
     musku_reply = (musku_reply or "").strip()
     if not user_text and not musku_reply:
         return
 
     with _LOCK:
-        state = _load()
+        state = _load(uid)
         state["last_user"] = user_text[:500]
         state["last_musku"] = musku_reply[:800]
 
@@ -177,12 +202,13 @@ def update_after_turn(user_text, musku_reply):
                 if state["correct_streak"] == 0:
                     state["streak_celebrated"] = 0
 
-        _save(state)
+        _save(state, uid)
 
 
-def get_live_turn_context_block():
-    """Gemini Live prompt — user jawab ko last Musku sawal se link karo."""
-    state = _load()
+def get_live_turn_context_block(uid=None):
+    """Gemini Live prompt — user jawab ko last Musku sawal se link karo.
+    Per-user scoped."""
+    state = _load(uid)
     parts = []
 
     if state.get("awaiting_answer") and state.get("pending_question"):
@@ -225,14 +251,15 @@ def get_live_turn_context_block():
     return header + "\n".join(parts) + "\n\n" + rules
 
 
-def snapshot():
+def snapshot(uid=None):
     with _LOCK:
-        return dict(_load())
+        return dict(_load(uid))
 
 
-def get_streak_prompt_block():
-    """Connect-time system prompt — sahi-jawab streak rule + current streak."""
-    state = _load()
+def get_streak_prompt_block(uid=None):
+    """Connect-time system prompt — sahi-jawab streak rule + current streak.
+    Per-user scoped."""
+    state = _load(uid)
     streak = int(state.get("correct_streak") or 0)
     line = ""
     if streak > 0:
@@ -246,11 +273,12 @@ def get_streak_prompt_block():
     )
 
 
-def claim_streak_celebration():
+def claim_streak_celebration(uid=None):
     """Milestone (2,3,5,8,13) cross hone par ek baar celebration instruction.
-    Warna None. Live session isko inject karke Gemini se praise bolwata hai."""
+    Warna None. Live session isko inject karke Gemini se praise bolwata hai.
+    Per-user scoped."""
     with _LOCK:
-        state = _load()
+        state = _load(uid)
         streak = int(state.get("correct_streak") or 0)
         if streak < 2:
             return None

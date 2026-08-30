@@ -32,9 +32,16 @@ def _load_api_key() -> str:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            key = (data.get("gemini_api_key") or data.get("google_api_key") or "").strip()
-            if key:
-                return key
+            raw = (data.get("gemini_api_key") or data.get("google_api_key") or "").strip()
+            if raw:
+                try:
+                    from crypto_utils import decrypt_value
+                    dec = decrypt_value(raw)
+                    if dec and dec.strip():
+                        return dec.strip()
+                except Exception:
+                    pass
+                return raw
     except Exception:
         pass
     return ""
@@ -150,20 +157,20 @@ class BrowserLiveWSServer:
             except Exception as e:
                 logger.debug("update_system_prompt inline: %s", e)
 
-    def send_start_greeting(self, uid=None):
-        """START dabane par greeting — queue-safe per user.
+    def send_start_greeting(self, uid=None, script=None):
+        """START dabane par greeting — queue-safe per user, force fresh turn.
 
-        Session connected hai toh direct send; warna us uid ke liye pending queue
-        karo (connect par flush). uid None ho toh last user ke liye queue."""
+        Session connected hai toh direct send (force=True har tap par);
+        warna us uid ke liye pending queue karo (script preserve, connect par flush)."""
         sess, loop = self._target(uid)
         if sess and loop and getattr(sess, "active", False):
             try:
-                asyncio.run_coroutine_threadsafe(sess.send_greeting(), loop)
+                asyncio.run_coroutine_threadsafe(sess.send_greeting(script, force=True), loop)
             except Exception as e:
                 logger.debug("send_start_greeting inline: %s", e)
         else:
             key = uid or self._last_uid or "_default_"
-            self._pending_greetings[key] = True
+            self._pending_greetings[key] = script if script else True
 
     def send_proactive_prompt_direct(self, prompt: str, uid=None):
         """Proactive prompt as-is — target user's session."""
@@ -185,7 +192,7 @@ class BrowserLiveWSServer:
             uid = get_uid() or self._last_uid
         prompt = (
             "[INTERNAL — yeh user ki baat nahi hai. Musku, awaaz se ye health/care "
-            "reminder naturally bolo. Feminine, hamesha aap + Boss. Tool mat use karo.]\n"
+            "reminder naturally bolo. Feminine, hamesha aap se pyaar se. Tool mat use karo.]\n"
             + str(text)
         )
         sess, loop = self._target(uid)
@@ -237,17 +244,95 @@ class BrowserLiveWSServer:
             except Exception:
                 pass
 
+    async def _process_http(self, connection, request):
+        """Single-port PaaS (RunxBuild/HF) — serve HTTP via same port as WS. /live → WS, else → app.handler."""
+        try:
+            path = getattr(request, "path", "") or ""
+            # Let /live through to WS handshake
+            if path.split("?")[0] in _LIVE_PATHS:
+                return None
+            # Build WSGI environ for app.handler
+            import io, urllib.parse
+            from app import handler as _app_handler
+            method = getattr(request, "method", "GET") or "GET"
+            headers = getattr(request, "headers", {}) or {}
+            # websockets headers is Headers object, convert to dict
+            try:
+                hdr_dict = dict(headers) if hasattr(headers, "items") else {}
+            except Exception:
+                hdr_dict = {}
+            body = getattr(request, "body", b"") or b""
+            if isinstance(body, str):
+                body = body.encode("utf-8")
+            # Parse path and query
+            parsed = urllib.parse.urlparse(path)
+            environ = {
+                "REQUEST_METHOD": method,
+                "PATH_INFO": parsed.path or "/",
+                "QUERY_STRING": parsed.query or "",
+                "SERVER_NAME": "localhost",
+                "SERVER_PORT": str(getattr(cfg, "BROWSER_LIVE_WS_PORT", 8000)),
+                "HTTP_HOST": hdr_dict.get("Host", hdr_dict.get("host", "")),
+                "CONTENT_LENGTH": str(len(body)),
+                "CONTENT_TYPE": hdr_dict.get("Content-Type", hdr_dict.get("content-type", "")),
+                "wsgi.input": io.BytesIO(body),
+                "wsgi.errors": __import__("sys").stderr,
+                "wsgi.url_scheme": "https" if hdr_dict.get("X-Forwarded-Proto", "") == "https" else "http",
+                "wsgi.multithread": True,
+                "wsgi.multiprocess": False,
+                "wsgi.run_once": False,
+            }
+            # Map HTTP_ headers
+            for k, v in hdr_dict.items():
+                kk = "HTTP_" + k.upper().replace("-", "_")
+                if kk not in ("HTTP_CONTENT_TYPE", "HTTP_CONTENT_LENGTH"):
+                    environ[kk] = v
+            # Capture WSGI response
+            status_headers = {}
+            def _start_response(status, headers, exc_info=None):
+                status_headers["status"] = status
+                status_headers["headers"] = headers
+                return lambda x: None
+            result = _app_handler(environ, _start_response)
+            body_out = b"".join(result) if result else b""
+            status_str = status_headers.get("status", "200 OK")
+            try:
+                code = int(status_str.split()[0])
+            except Exception:
+                code = 200
+            import http
+            return (http.HTTPStatus(code), status_headers.get("headers", []), body_out)
+        except Exception as e:
+            logger.debug("HTTP process error: %s", e)
+            import http
+            return (http.HTTPStatus(500), [("Content-Type", "text/plain")], b"internal")
+
     async def _async_main(self):
         host = getattr(cfg, "BROWSER_LIVE_WS_HOST", "127.0.0.1")
         port = int(getattr(cfg, "BROWSER_LIVE_WS_PORT", 3000))
-        self._server = await websockets.serve(
-            self._handler,
-            host,
-            port,
-            ping_interval=20,
-            ping_timeout=120,
-            max_size=2_000_000,
-        )
+        # Single-port PaaS: if WS port == HTTP PORT, serve HTTP via process_request on same port
+        import os
+        http_port = int(os.environ.get("PORT", "8000"))
+        single_port = (port == http_port)
+        if single_port:
+            self._server = await websockets.serve(
+                self._handler,
+                host,
+                port,
+                ping_interval=20,
+                ping_timeout=120,
+                max_size=2_000_000,
+                process_request=self._process_http,
+            )
+        else:
+            self._server = await websockets.serve(
+                self._handler,
+                host,
+                port,
+                ping_interval=20,
+                ping_timeout=120,
+                max_size=2_000_000,
+            )
         mode = "inline"
         logger.info("Browser Live WS (%s) on ws://%s:%s/live", mode, host, port)
         print(f"[LiveWS] /live on ws://{host}:{port}/live ({mode} mode)")
@@ -276,22 +361,48 @@ class BrowserLiveWSServer:
         return getattr(ws, "path", "") or ""
 
     async def _handler(self, ws):
+        # Origin check (CSWSH protection)
+        try:
+            origin = ""
+            req = getattr(ws, "request", None)
+            if req is not None:
+                origin = getattr(req, "headers", {}).get("Origin") or getattr(req, "headers", {}).get("origin") or ""
+            else:
+                origin = getattr(ws, "request_headers", {}).get("Origin", "") if hasattr(ws, "request_headers") else ""
+            if origin:
+                import os
+                allowed_raw = os.environ.get("ALLOWED_ORIGIN", "")
+                if allowed_raw and allowed_raw != "*":
+                    allowed = {o.strip() for o in allowed_raw.split(",") if o.strip()}
+                    if origin not in allowed and "https://musku-ai.web.app" not in allowed and "https://musku-ai.firebaseapp.com" not in allowed:
+                        # allow localhost for dev
+                        if origin not in ("http://localhost:8000","http://127.0.0.1:8000","http://localhost:8770"):
+                            logger.warning("WS rejected Origin %s", origin)
+                            await ws.close(1008, "origin not allowed")
+                            return
+        except Exception:
+            pass
         path = self._ws_path(ws)
         if path and path.split("?")[0] not in _LIVE_PATHS:
             await ws.close(1008, "invalid path")
             return
-        # Multi-tenant: extract raw uid, token from query string
+        # Multi-tenant: extract raw uid, token, key from query string
         from user_context import extract_uid_from_query
         raw_uid = extract_uid_from_query(path or "")
         token = None
+        key_qs = None
         try:
             from urllib.parse import parse_qs
             qs = path.split("?", 1)[1] if "?" in (path or "") else ""
             qd = parse_qs(qs)
             token = (qd.get("token", [None])[0]) or (qd.get("idToken", [None])[0]) or None
+            key_qs = (qd.get("key", [None])[0]) or None
         except Exception:
             token = None
+            key_qs = None
 
+        if key_qs:
+            logger.debug("WS key in query deprecated — use first-message auth; key_qs present for uid=%s", raw_uid)
         # Authoritative token verification via Firebase Auth
         from firebase.auth import verify_firebase_token
         uid = verify_firebase_token(token, fallback_uid=raw_uid)
@@ -307,7 +418,7 @@ class BrowserLiveWSServer:
         except Exception as e:
             logger.debug("voice_config send: %s", e)
 
-        await self._handler_inline_live(ws, uid=uid, key=None, token=token)
+        await self._handler_inline_live(ws, uid=uid, key=key_qs, token=token)
 
     async def _handler_inline_live(self, ws, uid=None, key=None, token=None):
         from live.musku_live_session import MuskuLiveSession
@@ -336,9 +447,9 @@ class BrowserLiveWSServer:
                 pass
         ensure_user_dir(vuid)
 
-        # Per-user Gemini key required for web users (no shared owner key fallback).
+        # Per-user Gemini key — fallback to global owner key for local-dev / anon users
         if vuid:
-            api_key = key or uconfig.get("gemini_api_key") or None
+            api_key = key or uconfig.get("gemini_api_key") or _load_api_key() or None
             if not api_key:
                 try:
                     await ws.send(json.dumps({"type": "error", "error": "API key required — add your Gemini key"}))
@@ -368,15 +479,18 @@ class BrowserLiveWSServer:
 
         override = self._system_prompt_overrides.get(ukey)
         system_prompt = override or cfg.get_live_system_prompt(
-            boss_name=user_name, language=language, relationship_mode=rel_mode
+            boss_name=user_name, language=language, relationship_mode=rel_mode, uid=vuid
         )
-        session = MuskuLiveSession(ws, api_key, system_prompt)
+        session = MuskuLiveSession(ws, api_key, system_prompt, uid=vuid)
         with self._lock:
             self._sessions[ukey] = session
             self._last_uid = ukey
-        # flush this user's queued greeting (set by /api/start before connect)
-        if self._pending_greetings.pop(ukey, False):
+        # flush this user's queued greeting (set by /api/start before connect) — preserve script
+        pending = self._pending_greetings.pop(ukey, None)
+        if pending is not None:
             session._greet_on_connect = True
+            if isinstance(pending, str):
+                session._pending_greeting = pending
         try:
             await ws.send(json.dumps({"type": "status", "status": "transport_connected"}))
             await session.run()
