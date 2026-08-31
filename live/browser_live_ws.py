@@ -341,6 +341,35 @@ class BrowserLiveWSServer:
             return Response(500, "Internal Server Error", Headers([("Content-Type", "text/plain")]), b"internal")
 
     async def _async_main(self):
+        # Patch websockets Request to allow POST with body for single-port HTTP (otherwise POST → 502)
+        try:
+            from websockets.http11 import Request as _WReq
+            import re as _re2
+            _orig_parse = _WReq.parse
+            def _patched_parse(read_line):
+                # allow GET and POST, allow Content-Length >0
+                from websockets.http11 import parse_line, parse_headers
+                from websockets.datastructures import Headers as _Hdrs
+                try:
+                    request_line = yield from parse_line(read_line)
+                except Exception as exc:
+                    raise
+                try:
+                    method, raw_path, protocol = request_line.split(b" ", 2)
+                except ValueError:
+                    from websockets.utils import decorators as _d
+                    raise ValueError(f"invalid request line: {request_line!r}")
+                if protocol != b"HTTP/1.1":
+                    raise ValueError(f"unsupported protocol: {request_line!r}")
+                if method not in (b"GET", b"POST", b"OPTIONS"):
+                    raise ValueError(f"unsupported method: {method!r}")
+                path = raw_path.decode("ascii", "surrogateescape")
+                headers = yield from parse_headers(read_line)
+                # allow body for POST
+                return _WReq(path, headers)
+            _WReq.parse = classmethod(lambda cls, read_line: _patched_parse(read_line))
+        except Exception:
+            pass
         host = getattr(cfg, "BROWSER_LIVE_WS_HOST", "127.0.0.1")
         port = int(getattr(cfg, "BROWSER_LIVE_WS_PORT", 3000))
         # Single-port PaaS: if WS port == HTTP PORT, serve HTTP via process_request on same port
