@@ -165,10 +165,10 @@ def user_config_file(uid=None) -> str:
 # per-user config
 # --------------------------------------------------------------------------- #
 def load_config(uid=None) -> dict:
-    """Load per-user config merged with defaults/legacy.
+    """Load per-user config merged with defaults/legacy + Firestore (100+ BYOK).
 
-    owner -> reads global config.json (legacy). New web user -> reads their
-    own config.json (created on first save), merged over DEFAULT_CONFIG.
+    Priority: Firestore encrypted key -> file -> DEFAULT.
+    Firestore gives cross-domain + redeploy persistence; file is fallback.
     """
     u = safe_uid(uid if uid is not None else get_uid())
     if u == _OWNER:
@@ -179,20 +179,55 @@ def load_config(uid=None) -> dict:
         merged.update(cfg)
         return merged
 
+    # Try Firestore first (cross-domain, survives redeploy)
+    fs_enc = None
+    try:
+        from firebase.api_keys import load_api_key_fs
+        fs_enc = load_api_key_fs(u)
+    except Exception:
+        fs_enc = None
+
     f = user_config_file(u)
     if os.path.exists(f):
         cfg = _read_json(f) or {}
+        # Firestore wins if present
+        if fs_enc:
+            cfg["gemini_api_key"] = fs_enc
         if cfg.get("gemini_api_key"):
             cfg["gemini_api_key"] = decrypt_value(cfg["gemini_api_key"])
         merged = dict(DEFAULT_CONFIG)
         merged.update(cfg)
+        # Opportunistic migrate: Firestore empty but file has key -> push to FS
+        if not fs_enc and cfg.get("gemini_api_key"):
+            try:
+                from firebase.api_keys import save_api_key_fs
+                from crypto_utils import encrypt_value as _enc2
+                hint = cfg["gemini_api_key"][:6] + "..." + cfg["gemini_api_key"][-4:] if len(cfg["gemini_api_key"]) > 10 else ""
+                save_api_key_fs(u, _enc2(cfg["gemini_api_key"]), hint)
+            except Exception:
+                pass
         return merged
+
+    if fs_enc:
+        try:
+            dec = decrypt_value(fs_enc)
+            merged = dict(DEFAULT_CONFIG)
+            merged["gemini_api_key"] = dec
+            # materialize file for offline fallback
+            try:
+                os.makedirs(user_dir(u), exist_ok=True)
+                _write_json(f, {"gemini_api_key": fs_enc})
+            except Exception:
+                pass
+            return merged
+        except Exception:
+            pass
     # brand-new user: inherit safe defaults (no key yet)
     return dict(DEFAULT_CONFIG)
 
 
 def save_config(patch: dict, uid=None) -> dict:
-    """Persist a per-user config patch (merges). Returns the saved config."""
+    """Persist a per-user config patch (merges). Dual write: file + Firestore."""
     u = safe_uid(uid if uid is not None else get_uid())
     if u == _OWNER:
         path = LEGACY_CONFIG
@@ -203,7 +238,18 @@ def save_config(patch: dict, uid=None) -> dict:
     data = _read_json(path) or {}
     data.update(patch)
     if data.get("gemini_api_key"):
-        data["gemini_api_key"] = encrypt_value(data["gemini_api_key"])
+        enc = encrypt_value(data["gemini_api_key"])
+        data["gemini_api_key"] = enc
+        # Firestore dual write (best-effort, never block)
+        if u != _OWNER and patch.get("gemini_api_key"):
+            try:
+                from firebase.api_keys import save_api_key_fs
+                raw = patch["gemini_api_key"]
+                # raw may be plain, ensure enc is correct
+                hint = raw[:6] + "..." + raw[-4:] if isinstance(raw, str) and len(raw) > 10 else ""
+                save_api_key_fs(u, enc, hint)
+            except Exception:
+                pass
     _write_json(path, data)
     out = dict(data)
     if out.get("gemini_api_key"):
@@ -260,13 +306,30 @@ def _write_json(path, data):
         # atomic write: temp -> replace (crash par 00 bytes corrupt nahi hoga)
         import tempfile
         dir_name = os.path.dirname(os.path.abspath(path)) or "."
-        os.makedirs(dir_name, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=dir_name)
+        try:
+            os.makedirs(dir_name, exist_ok=True)
+        except Exception:
+            pass
+        # fallback: if perm denied, try direct write (no temp)
+        try:
+            fd, tmp = tempfile.mkstemp(dir=dir_name)
+        except PermissionError:
+            # RunxBuild non-root fallback: direct write
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=4, ensure_ascii=False)
+                return
+            except Exception as e2:
+                print(f"[UserConfig Write Error perm fallback]: {e2}")
+                return
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
                 f.flush()
-                os.fsync(f.fileno())
+                try:
+                    os.fsync(f.fileno())
+                except Exception:
+                    pass
             os.replace(tmp, path)
         finally:
             try:
@@ -275,4 +338,5 @@ def _write_json(path, data):
             except Exception:
                 pass
     except Exception as e:
+        # Best-effort: Firestore already saved, don't crash container
         print(f"[UserConfig Write Error]: {e}")

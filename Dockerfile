@@ -15,6 +15,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy app source (respects .dockerignore: no secrets/logs/cache)
 COPY . .
+# Ensure writable dirs for 100+ users (RunxBuild may run as non-root)
+RUN mkdir -p /app/musku_users /app/musku_data /app/musku_chat && chmod -R 777 /app/musku_users /app/musku_data /app/musku_chat || true
 
 EXPOSE 8000
 

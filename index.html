@@ -915,9 +915,9 @@
     box-shadow: 0 0 26px var(--accent), 0 0 70px rgba(192,132,252,.35);
     animation: faceGlow 4.2s ease-in-out infinite;
   }
-  /* TRY avatar 2T is 9:16 portrait — cover inside circle, no black bars, no flicker */
-  .musku-img.try-portrait { padding: 0; background: #0c0a1e; }
-  .musku-img.try-portrait #muskuGif { object-fit: cover; object-position: center 12%; background: #0c0a1e; transform: none; transform-origin: center center; }
+  /* TRY avatar 2T is 9:16 portrait — full body visible, no crop, circle unchanged */
+  .musku-img.try-portrait { padding: 0; background: #000; }
+  .musku-img.try-portrait #muskuGif { object-fit: contain; object-position: center center; background: #000; transform: none; transform-origin: center center; width: 100%; height: 100%; }
   .musku-img::after {
     content: ""; position: absolute; inset: 0; border-radius: 50%;
     box-shadow: inset 0 0 30px rgba(0,0,0,.5);
@@ -6884,13 +6884,40 @@ window._muskuCheckAudioIdle = function () {
       if(!k) return;
       try{ localStorage.setItem("musku_api_key", k); }catch(e){}
       try{
-        var uid2=null;
-        try{ var a2=JSON.parse(localStorage.getItem("musku_auth_user")||"null"); if(a2 && a2.uid) uid2=a2.uid; }catch(e){}
-        if(!uid2) try{ uid2=getMuskuUid(); }catch(e){}
-        if(uid2) try{ localStorage.setItem("musku_api_key_"+uid2, k); }catch(e){}
+        var uids=[]; try{ var a2=JSON.parse(localStorage.getItem("musku_auth_user")||"null"); if(a2 && a2.uid) uids.push(a2.uid); }catch(e){}
+        try{ var anon=localStorage.getItem("musku_anon_uid"); if(anon) uids.push(anon); }catch(e){}
+        try{ var cur=getMuskuUid(); if(cur && uids.indexOf(cur)===-1) uids.push(cur); }catch(e){}
+        for(var i=0;i<uids.length;i++){ try{ if(uids[i]) localStorage.setItem("musku_api_key_"+uids[i], k); }catch(e){} }
+      }catch(e){}
+      try{
+        if(k && k.indexOf("AIza")===0){
+          var _u=null; try{ var _a=JSON.parse(localStorage.getItem("musku_auth_user")||"null"); if(_a && _a.uid) _u=_a.uid; }catch(e){}
+          if(!_u) try{ _u=getMuskuUid(); }catch(e){}
+          // use fresh token if available
+          var _fresh=function(t){ try{ fetch("/api/save-key",{method:"POST",headers:{"Content-Type":"application/json", "Authorization": t? "Bearer "+t : ""},body:JSON.stringify({uid:_u, token:t, key:k})}).catch(function(){}); }catch(e){} };
+          try{ if(typeof firebase!=="undefined" && firebase.auth().currentUser){ firebase.auth().currentUser.getIdToken(true).then(function(t){ try{ localStorage.setItem("musku_id_token", t); }catch(e){} _fresh(t); }).catch(function(){ var _t=""; try{ _t=localStorage.getItem("musku_id_token")||""; }catch(e){} _fresh(_t); }); }else{ var _t=""; try{ _t=localStorage.getItem("musku_id_token")||""; }catch(e){} _fresh(_t); } }catch(e){}
+        }
       }catch(e){}
     }
     try { window.getMuskuUid = getMuskuUid; window.getMuskuToken = getMuskuToken; window.getMuskuApiKey=getMuskuApiKey; window.setMuskuApiKey=setMuskuApiKey; } catch(e){}
+    // If user entered key before login (anon uid), migrate to Firebase uid after auth
+    try{
+      if(typeof firebase!=="undefined" && firebase.auth){
+        firebase.auth().onAuthStateChanged(function(user){
+          try{
+            if(user && user.uid){
+              var anonKey=""; try{ anonKey=localStorage.getItem("musku_api_key_"+(localStorage.getItem("musku_anon_uid")||""))||""; }catch(e){}
+              var curKey=""; try{ curKey=localStorage.getItem("musku_api_key_"+user.uid)||""; }catch(e){}
+              if(anonKey && !curKey){
+                try{ localStorage.setItem("musku_api_key_"+user.uid, anonKey); }catch(e){}
+                // also push to Firestore with fresh token
+                user.getIdToken(true).then(function(t){ try{ localStorage.setItem("musku_id_token", t); }catch(e){} try{ fetch("/api/save-key",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+t},body:JSON.stringify({uid:user.uid, token:t, key:anonKey})}).catch(function(){}); }catch(e){} }).catch(function(){});
+              }
+            }
+          }catch(e){}
+        });
+      }
+    }catch(e){}
     function muskuQuery() {
       var q = "uid=" + encodeURIComponent(getMuskuUid());
       var k = getMuskuApiKey() || "";
@@ -7615,11 +7642,20 @@ window._muskuCheckAudioIdle = function () {
     k=(k||"").trim(); if(!k) return;
     try{ localStorage.setItem(KEY_STORE, k); }catch(e){}
     try{
-      var uid2=null;
-      try{ var a2=JSON.parse(localStorage.getItem("musku_auth_user")||"null"); if(a2 && a2.uid) uid2=a2.uid; }catch(e){}
-      if(!uid2) try{ uid2=(typeof getMuskuUid==="function"?getMuskuUid():(window.getMuskuUid?window.getMuskuUid():"")); }catch(e){}
-      if(uid2) try{ localStorage.setItem(KEY_STORE+"_"+uid2, k); }catch(e){}
+      var uids=[]; try{ var a2=JSON.parse(localStorage.getItem("musku_auth_user")||"null"); if(a2 && a2.uid) uids.push(a2.uid); }catch(e){}
+      try{ var anon=localStorage.getItem("musku_anon_uid"); if(anon) uids.push(anon); }catch(e){}
+      try{ var cur=(typeof getMuskuUid==="function"?getMuskuUid():""); if(cur && uids.indexOf(cur)===-1) uids.push(cur); }catch(e){}
+      for(var i=0;i<uids.length;i++){ try{ if(uids[i]) localStorage.setItem(KEY_STORE+"_"+uids[i], k); }catch(e){} }
       try{ if(typeof setMuskuApiKey==="function") setMuskuApiKey(k); }catch(e){}
+    }catch(e){}
+    // Firestore sync (100+ BYOK: survive redeploy + cross-domain) with fresh token
+    try{
+      var _uidSync=null; try{ var _a=JSON.parse(localStorage.getItem("musku_auth_user")||"null"); if(_a && _a.uid) _uidSync=_a.uid; }catch(e){}
+      if(!_uidSync) try{ _uidSync=(typeof getMuskuUid==="function"?getMuskuUid():""); }catch(e){}
+      if(_uidSync && k && k.indexOf("AIza")===0){
+        var _doSave=function(t){ try{ fetch("/api/save-key",{method:"POST",headers:{"Content-Type":"application/json", "Authorization": t? "Bearer "+t : ""},body:JSON.stringify({uid:_uidSync, token:t, key:k})}).catch(function(){}); }catch(e){} };
+        try{ if(typeof firebase!=="undefined" && firebase.auth().currentUser){ firebase.auth().currentUser.getIdToken(true).then(function(t){ try{ localStorage.setItem("musku_id_token", t); }catch(e){} _doSave(t); }).catch(function(){ var _t=""; try{ _t=localStorage.getItem("musku_id_token")||""; }catch(e){} _doSave(_t); }); }else{ var _t=""; try{ _t=localStorage.getItem("musku_id_token")||""; }catch(e){} _doSave(_t); } }catch(e){}
+      }
     }catch(e){}
   }
   function getLang() {

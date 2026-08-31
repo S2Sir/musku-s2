@@ -18,6 +18,22 @@ from websockets.exceptions import ConnectionClosed
 from live import voice_config as cfg
 
 logger = logging.getLogger("MUSKU.BrowserLiveWS")
+# Silence noisy probe EOF spam that causes log bloat → OOM 137 on RunxBuild
+for _lname in ("websockets.server", "websockets.asyncio.server"):
+    try:
+        _wl = logging.getLogger(_lname)
+        _wl.setLevel(logging.WARNING)
+        # filter EOF probe: don't log handshake failed for empty request
+        class _ProbeFilter(logging.Filter):
+            def filter(self, record):
+                msg = record.getMessage() if hasattr(record, "getMessage") else str(record.msg) if hasattr(record, "msg") else ""
+                if "EOFError" in msg or "opening handshake failed" in msg or "InvalidMessage" in msg:
+                    # only suppress if stack is probe (no path), keep real errors with stack
+                    return False
+                return True
+        _wl.addFilter(_ProbeFilter())
+    except Exception:
+        pass
 
 _LIVE_PATHS = frozenset({"/live", "/live/"})
 

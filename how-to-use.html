@@ -309,15 +309,21 @@
   if(p) p.addEventListener("click", function(e){
     try{
       var u2=JSON.parse(localStorage.getItem("musku_auth_user")||"null");
-      if(!u2){ e.preventDefault(); go("signup.html"); return; }
+      if(!u2 || u2.provider!=="google"){ e.preventDefault(); go("signup.html"); return; }
     }catch(e){}
   });
   if(o) o.addEventListener("click", function(e){
     try{
       var u3=JSON.parse(localStorage.getItem("musku_auth_user")||"null");
-      if(!u3){ e.preventDefault(); go("signup.html"); return; }
+      if(!u3 || u3.provider!=="google"){ e.preventDefault(); go("signup.html"); return; }
       var pl3=null; try{ var per3=localStorage.getItem("musku_activate_plan_"+u3.uid); if(per3) pl3=JSON.parse(per3); else pl3=JSON.parse(localStorage.getItem("musku_activate_plan")||"null"); }catch(e){}
-      var act3=false; try{ if(pl3 && pl3.type==="free" && pl3.until){ var exp3=new Date(pl3.until).getTime(); if(pl3.until.indexOf("T")===-1) exp3+=86400000-1000; act3=exp3>Date.now(); } else if(pl3 && pl3.type==="free") act3=true; }catch(e){}
+      var act3=false; try{
+        if(pl3 && pl3.until){
+          var exp3=new Date(pl3.until).getTime();
+          if(pl3.until.indexOf("T")===-1 && !isNaN(exp3)) exp3+=86400000-1000;
+          act3=exp3>Date.now();
+        } else if(pl3 && (pl3.type==="free" || pl3.type==="pro")) act3=true;
+      }catch(e){}
       if(!act3){ e.preventDefault(); go("activate.html"); return; }
     }catch(e){}
   });

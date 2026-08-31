@@ -297,6 +297,48 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": "internal"}).encode("utf-8"))
             return
 
+        if self.path in ("/api/save-key", "/api/save-key/"):
+            clen = int(self.headers.get("Content-Length", 0) or 0)
+            if clen > MAX_API_BODY:
+                self.send_response(413)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "payload too large"}).encode("utf-8"))
+                return
+            try:
+                raw = (self.rfile.read(clen) or b"{}")
+                body = json.loads(raw.decode("utf-8"))
+                from auth_verify import extract_token, resolve_verified_uid
+                token = extract_token(dict(self.headers), body)
+                uid = resolve_verified_uid(token, body.get("uid"))
+                if uid is None:
+                    self.send_response(401)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "unauthorized"}).encode("utf-8"))
+                    return
+                raw_key = (body.get("key") or body.get("gemini_api_key") or "").strip()
+                import re as _re
+                if not _re.match(r"^AIza[0-9A-Za-z\-_]{35,}$", raw_key):
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "invalid_key"}).encode("utf-8"))
+                    return
+                from user_context import save_config
+                save_config({"gemini_api_key": raw_key}, uid)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
+            except Exception as e:
+                print(f"[API /api/save-key error] {e}")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "internal"}).encode("utf-8"))
+            return
+
         self.send_response(404)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
@@ -534,6 +576,47 @@ def handler(environ, start_response):
             return [json.dumps({"reply": reply}).encode("utf-8")]
         except Exception as e:
             print(f"[WSGI /api/chat error] {e}")
+            start_response("500 Internal Error", [("Content-Type", "application/json")])
+            return [json.dumps({"error": "internal"}).encode("utf-8")]
+
+    if method == "POST" and path in ("/api/save-key", "/api/save-key/"):
+        try:
+            length = int(environ.get("CONTENT_LENGTH", 0) or 0)
+            if length > MAX_API_BODY:
+                start_response("413 Payload Too Large", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "payload too large"}).encode("utf-8")]
+            body_bytes = environ["wsgi.input"].read(length) if length > 0 else b"{}"
+            body = json.loads(body_bytes.decode("utf-8"))
+            from auth_verify import extract_token, resolve_verified_uid
+            headers_dict = {k.replace("HTTP_", "").replace("_", "-").title(): v for k, v in environ.items() if k.startswith("HTTP_")}
+            token = extract_token(headers_dict, body)
+            uid = resolve_verified_uid(token, body.get("uid"))
+            if uid is None:
+                start_response("401 Unauthorized", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "unauthorized"}).encode("utf-8")]
+            raw_key = (body.get("key") or body.get("gemini_api_key") or "").strip()
+            if not raw_key:
+                start_response("400 Bad Request", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "key required"}).encode("utf-8")]
+            # Validate AIza format (prevent AQ... mistakes)
+            import re as _re
+            if not _re.match(r"^AIza[0-9A-Za-z\-_]{35,}$", raw_key):
+                start_response("400 Bad Request", [("Content-Type", "application/json")])
+                return [json.dumps({"error": "invalid_key", "hint": "Key must start with AIza..."}).encode("utf-8")]
+            # Optional live validate (non-blocking best-effort, don't fail on network)
+            # Save via user_context (dual write Firestore + file)
+            from user_context import save_config
+            save_config({"gemini_api_key": raw_key}, uid)
+            req_origin = environ.get("HTTP_ORIGIN", "")
+            allowed_origin = _cors_origin(req_origin)
+            hdrs = [("Content-Type", "application/json"), ("X-Content-Type-Options", "nosniff")]
+            if allowed_origin:
+                hdrs.append(("Access-Control-Allow-Origin", allowed_origin))
+                hdrs.append(("Vary", "Origin"))
+            start_response("200 OK", hdrs)
+            return [json.dumps({"status": "ok", "hint": raw_key[:6] + "..." + raw_key[-4:]}).encode("utf-8")]
+        except Exception as e:
+            print(f"[WSGI /api/save-key error] {e}")
             start_response("500 Internal Error", [("Content-Type", "application/json")])
             return [json.dumps({"error": "internal"}).encode("utf-8")]
 
