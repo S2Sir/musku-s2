@@ -609,7 +609,7 @@ class MuskuLiveSession:
                 elif txt.strip():
                     self._prepare_user_piece(txt)
                     was_empty = not self._user_turn_buf.strip()
-                    self._user_turn_buf = self._merge_transcript(self._user_turn_buf, txt)
+                    self._user_turn_buf = live_display_text(self._merge_transcript(self._user_turn_buf, txt))
                     if was_empty:
                         bus.publish("USER_SPEECH_PARTIAL", self._user_turn_buf)
                     try:
