@@ -70,12 +70,14 @@ _HUMOR_INDICATORS = (
 )
 
 def filter_unnecessary_laughter(user_text: str, model_text: str) -> str:
-    """If user text does not contain explicit funny indicators, strip trailing 'hehe/haha' from model reply."""
+    """If user text does not contain explicit funny indicators, strip all unprompted 'hehe/haha' from model reply."""
     if not model_text:
         return model_text
     u_low = (user_text or "").lower()
     is_funny = any(w in u_low for w in _HUMOR_INDICATORS)
     if not is_funny:
-        clean = re.sub(r"(?:\s*[\.,!]*\s*|\s+)(?:Hehe|hehe|Haha|haha|Hahaha|hahaha)[.!]*\s*$", "", model_text).strip()
+        # Strip all unprompted Hehe / hehe / Haha / haha tokens
+        clean = re.sub(r"\b(Hehe|hehe|Haha|haha|Hahaha|hahaha)[.!]*\s*", "", model_text).strip()
+        clean = re.sub(r"\s+", " ", clean).strip()
         return clean
     return model_text
