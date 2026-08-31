@@ -58,6 +58,9 @@ def _cors_origin(request_origin: str) -> str:
     # Vercel preview/prod: allow any *.vercel.app (deployment URLs vary)
     if request_origin and request_origin.endswith(".vercel.app"):
         return request_origin
+    # RunxBuild / PaaS: allow any *.runxbuild.app
+    if request_origin and (request_origin.endswith(".runxbuild.app") or ".runxbuild." in request_origin):
+        return request_origin
     # no Origin header (same-origin fetch / curl) => allow
     if not request_origin:
         return next(iter(allowed)) if allowed else "*"
@@ -300,6 +303,13 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps({"error": "not found"}).encode("utf-8"))
 
     def do_GET(self):
+        # Health check for PaaS (RunxBuild/HF/Render) - must be 200 without auth
+        if self.path in ("/health", "/health/", "/api/health", "/api/health/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "service": "musku-2.0"}).encode("utf-8"))
+            return
         # Block sensitive files
         blocked = ("/config.json", "/.env", "/crypto_utils.py", "/debug_greeting.log", "/server.log", "/server_err.log", "/musku_data", "/musku_users", "/musku_chat", "/.git")
         for b in blocked:
@@ -378,6 +388,10 @@ def handler(environ, start_response):
     """WSGI entrypoint for Vercel Python serverless runtime."""
     path = environ.get("PATH_INFO", "/")
     method = environ.get("REQUEST_METHOD", "GET")
+    # Health check for PaaS (RunxBuild) - before auth
+    if method == "GET" and path in ("/health", "/health/", "/api/health", "/api/health/"):
+        start_response("200 OK", [("Content-Type", "application/json")])
+        return [json.dumps({"status": "ok", "service": "musku-2.0"}).encode("utf-8")]
     
     if method == "OPTIONS":
         req_origin = environ.get("HTTP_ORIGIN", "")

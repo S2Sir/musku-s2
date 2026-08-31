@@ -300,12 +300,19 @@ class BrowserLiveWSServer:
                 code = int(status_str.split()[0])
             except Exception:
                 code = 200
-            import http
-            return (http.HTTPStatus(code), status_headers.get("headers", []), body_out)
+            # websockets >=12 expects Response object, not tuple
+            from websockets.http11 import Response
+            from websockets.datastructures import Headers
+            reason = status_str.split(" ", 1)[1] if " " in status_str else "OK"
+            raw_hdrs = status_headers.get("headers", [])
+            # Ensure Headers type
+            headers_obj = Headers(raw_hdrs)
+            return Response(code, reason, headers_obj, body_out)
         except Exception as e:
             logger.debug("HTTP process error: %s", e)
-            import http
-            return (http.HTTPStatus(500), [("Content-Type", "text/plain")], b"internal")
+            from websockets.http11 import Response
+            from websockets.datastructures import Headers
+            return Response(500, "Internal Server Error", Headers([("Content-Type", "text/plain")]), b"internal")
 
     async def _async_main(self):
         host = getattr(cfg, "BROWSER_LIVE_WS_HOST", "127.0.0.1")
@@ -375,8 +382,10 @@ class BrowserLiveWSServer:
                 if allowed_raw and allowed_raw != "*":
                     allowed = {o.strip() for o in allowed_raw.split(",") if o.strip()}
                     if origin not in allowed and "https://musku-ai.web.app" not in allowed and "https://musku-ai.firebaseapp.com" not in allowed:
-                        # allow localhost for dev
-                        if origin not in ("http://localhost:8000","http://127.0.0.1:8000","http://localhost:8770"):
+                        # allow PaaS wildcards (Vercel, RunxBuild) and localhost for dev
+                        if origin.endswith(".vercel.app") or origin.endswith(".runxbuild.app") or ".runxbuild." in origin:
+                            pass
+                        elif origin not in ("http://localhost:8000","http://127.0.0.1:8000","http://localhost:8770"):
                             logger.warning("WS rejected Origin %s", origin)
                             await ws.close(1008, "origin not allowed")
                             return

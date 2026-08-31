@@ -915,9 +915,9 @@
     box-shadow: 0 0 26px var(--accent), 0 0 70px rgba(192,132,252,.35);
     animation: faceGlow 4.2s ease-in-out infinite;
   }
-  /* TRY avatar 2T is 9:16 portrait — contain inside circle, slight zoom to fill top gap */
-  .musku-img.try-portrait { padding: 0; background: #080612; }
-  .musku-img.try-portrait #muskuGif { object-fit: contain; background: #080612; transform: scale(1.08); transform-origin: center center; }
+  /* TRY avatar 2T is 9:16 portrait — cover inside circle, no black bars, no flicker */
+  .musku-img.try-portrait { padding: 0; background: #0c0a1e; }
+  .musku-img.try-portrait #muskuGif { object-fit: cover; object-position: center 12%; background: #0c0a1e; transform: none; transform-origin: center center; }
   .musku-img::after {
     content: ""; position: absolute; inset: 0; border-radius: 50%;
     box-shadow: inset 0 0 30px rgba(0,0,0,.5);
@@ -4159,16 +4159,59 @@
   function setGif(src) {
     var el = document.getElementById("muskuGif");
     if (!el) return;
-    // Stable (cache-busted-free) URL so the browser reuses the already-decoded,
-    // preloaded GIF — swapping is instant with NO reload flash / flicker.
     var clean = src.split("?")[0];
-    if (el.getAttribute("data-gif") === clean) return; // same src → don't touch it
-    el.setAttribute("data-gif", clean);
-    el.onerror = function () {
-      el.onerror = null;
-      if (el.getAttribute("data-gif") !== NORMAL_GIF) { el.removeAttribute("data-gif"); el.src = NORMAL_GIF; }
+    if (el.getAttribute("data-gif") === clean) return;
+    // Preload off-screen then swap — old gif stays visible until new is decoded, so no black flicker.
+    var tmp = new Image();
+    var doSwap = function(){
+      el.setAttribute("data-gif", clean);
+      el.onerror = function () {
+        el.onerror = null;
+        if (el.getAttribute("data-gif") !== NORMAL_GIF) { el.removeAttribute("data-gif"); el.src = NORMAL_GIF; }
+      };
+      // instant swap without opacity dip — already decoded
+      if (el.decode) {
+        el.src = clean;
+        el.decode().catch(function(){}); // ensure decode, keep visible
+      } else {
+        el.src = clean;
+      }
     };
-    el.src = clean;
+    tmp.onload = doSwap;
+    tmp.onerror = doSwap;
+    tmp.src = clean;
+    if (tmp.complete) {
+      // already cached — swap immediately on next frame to avoid layout thrash
+      tmp.onload = null; tmp.onerror = null;
+      doSwap();
+    }
+  }
+  // Avatar switch ke liye smooth crossfade — bina flickering ke
+  function setGifSmooth(src, onDone) {
+    var el = document.getElementById("muskuGif");
+    if (!el) { if(onDone) onDone(); return; }
+    var clean = src.split("?")[0];
+    if (el.getAttribute("data-gif") === clean) { if(onDone) onDone(); return; }
+    var tmp = new Image();
+    tmp.src = clean;
+    var swap = function(){
+      el.setAttribute("data-gif", clean);
+      el.onerror = function(){
+        el.onerror = null;
+        if (el.getAttribute("data-gif") !== NORMAL_GIF) { el.removeAttribute("data-gif"); el.src = NORMAL_GIF; }
+      };
+      el.src = clean;
+      // fade in gently
+      el.style.opacity = "1";
+      if(onDone) onDone();
+    };
+    // keep old image visible while preload
+    if (tmp.complete) { swap(); return; }
+    tmp.onload = function(){
+      if (el.decode) { el.src = clean; el.decode().then(swap).catch(swap); }
+      else swap();
+    };
+    tmp.onerror = swap;
   }
 
   function cycleGif() {
@@ -4250,14 +4293,13 @@
   }
   function selectAvatar(id) {
     if (id === "2") {
-      // TRY one-shot: play img/2/2T.gif once (~5s) then auto revert to default, no voice
+      // TRY one-shot: play img/2/2T.gif once (~5s) then auto revert, no flicker
       var strip2 = document.getElementById("avatarStrip");
       if (strip2) {
         strip2.querySelectorAll(".avatar-circle").forEach(function (c) {
           c.classList.toggle("sel", c.dataset.avatar === "2");
         });
       }
-      // close avatar/profile popover on TRY click + go to LIVE if in chat/history
       var avBox = document.querySelector(".avatar");
       if(avBox) avBox.classList.remove("open");
       var pop = avBox ? avBox.querySelector(".popover") : null;
@@ -4273,21 +4315,35 @@
       clearTimeout(gifTimer);
       var tryGif = "img/2/2T.gif";
       var wrap = document.querySelector(".musku-img");
-      if(wrap) wrap.classList.add("try-portrait");
       var el = document.getElementById("muskuGif");
-      if(el){ el.style.objectFit = "contain"; el.style.background = "#080612"; }
-      setGif(tryGif);
-      // keep currentAvatar as "1" in storage — one-shot preview only (404 me bhi 5s baad revert)
+      // Preload first — tab tak old gif visible, no black flash
+      var pre = new Image();
+      pre.src = tryGif;
+      var doTry = function(){
+        if(wrap) wrap.classList.add("try-portrait");
+        // let CSS handle object-fit, remove inline that caused contain+black bars
+        if(el){ el.style.objectFit = ""; el.style.background = ""; }
+        setGifSmooth(tryGif);
+      };
+      if (pre.complete) doTry();
+      else { pre.onload = doTry; pre.onerror = doTry; }
+      // keep currentAvatar as "1" in storage — one-shot preview only
       setTimeout(function(){
         clearTimeout(gifTimer);
-        if(wrap) wrap.classList.remove("try-portrait");
-        if(el){ el.style.objectFit = ""; el.style.background = ""; }
-        if (strip2) {
-          strip2.querySelectorAll(".avatar-circle").forEach(function (c) {
-            c.classList.toggle("sel", c.dataset.avatar === "1");
-          });
-        }
-        setGif(NORMAL_GIF);
+        // Preload Normal before removing portrait class to avoid flicker on revert
+        var pre2 = new Image(); pre2.src = NORMAL_GIF;
+        var doRevert = function(){
+          if(wrap) wrap.classList.remove("try-portrait");
+          if(el){ el.style.objectFit = ""; el.style.background = ""; }
+          if (strip2) {
+            strip2.querySelectorAll(".avatar-circle").forEach(function (c) {
+              c.classList.toggle("sel", c.dataset.avatar === "1");
+            });
+          }
+          setGifSmooth(NORMAL_GIF);
+        };
+        if (pre2.complete) doRevert();
+        else { pre2.onload = doRevert; pre2.onerror = doRevert; }
       }, 5000);
       return;
     }
@@ -6779,12 +6835,12 @@ window._muskuCheckAudioIdle = function () {
     var liveWs = null;
     var wsProto = location.protocol === "https:" ? "wss:" : "ws:";
     var wsHost = location.hostname || "127.0.0.1";
-    // Dev: WS on separate :8770. Prod (nginx HTTPS): same-origin /live path
-    // (nginx terminates TLS and proxies /live -> 127.0.0.1:8770).
-    var _wsPort = location.port;
-    var liveWsUrl = wsProto + "//" + wsHost
-      + (_wsPort && _wsPort !== "80" && _wsPort !== "443" ? ":8770" : "")
-      + "/live";
+    // Dev (localhost): WS on :8770. Prod/PaaS (RunxBuild/HF/Render/nginx HTTPS): same-origin /live
+    // Single-port mode: backend serves HTTP + WS on same $PORT, so use location.host
+    var _isLocal = wsHost === "localhost" || wsHost === "127.0.0.1" || wsHost === "";
+    var liveWsUrl = _isLocal
+      ? wsProto + "//" + wsHost + ":8770/live"
+      : wsProto + "//" + location.host + "/live";
 
     /* Multi-tenant: stable per-browser user id (anonymous UUID) sent to the
        server so storage + persona are scoped per user. Reuses Google login uid
