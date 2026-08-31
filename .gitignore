@@ -21,3 +21,18 @@ musku_live_session.log
 .DS_Store
 .vscode/
 .idea/
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf

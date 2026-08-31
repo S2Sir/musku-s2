@@ -851,6 +851,27 @@ def deva_to_hinglish(text):
             result = re.sub(r"[\u0900-\u097F]+", _translit_chunk, result)
         except Exception:
             pass
+    # Final safety fallback: guarantee 0% Devanagari chars remain in Roman Hinglish bubbles
+    if re.search(r"[\u0900-\u097F]", result):
+        _DEVA_CHAR_MAP = {
+            'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo', 'ऋ': 'ri',
+            'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'an', 'अः': 'ah',
+            'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo', 'ृ': 'ri',
+            'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ँ': 'n', 'ः': 'h', '्': '', '़': '',
+            'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'ङ': 'ng',
+            'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'ny',
+            'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n',
+            'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
+            'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm',
+            'य': 'y', 'र': 'r', 'ल': 'l', 'व': 'v', 'श': 'sh', 'ष': 'sh', 'स': 's', 'ह': 'h',
+            'क्ष': 'ksh', 'त्र': 'tr', 'ज्ञ': 'gya', 'ड़': 'd', 'ढ़': 'dh', 'फ़': 'f', 'ज़': 'z',
+            '।': '.', '॥': '.'
+        }
+        res_chars = []
+        for ch in result:
+            res_chars.append(_DEVA_CHAR_MAP.get(ch, ch))
+        result = "".join(res_chars)
+        result = re.sub(r"[\u0900-\u097F]", "", result)
     return result
 
 

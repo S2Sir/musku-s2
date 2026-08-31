@@ -2491,6 +2491,7 @@
     }
 
     /* Tab visibility — body[data-tab] controls which panel shows */
+    body:not([data-tab]) main.panel.center,
     body[data-tab="companion"] main.panel.center,
     body[data-tab="system"]    aside.panel.left-panel,
     body[data-tab="chat"]      aside.panel.chat-panel,
@@ -2967,7 +2968,7 @@
 
 </style>
 </head>
-<body data-state="idle" data-design="flower">
+<body data-state="idle" data-design="flower" data-tab="companion">
 <div id="mFrame">
   <div id="muskuAlertBar" class="musku-alert-bar hidden">
     <span class="mal-icon">⚠</span>
@@ -4630,7 +4631,24 @@ window.add_message = function (role, text) {
 };
 window._userLiveBubble = null;
 window._currentTurnSeq = 0;
+function _cleanDevanagariToHinglish(text) {
+  if (!text || !/[\u0900-\u097F]/.test(text)) return text;
+  var map = {
+    'अ':'a','आ':'aa','इ':'i','ई':'ee','उ':'u','ऊ':'oo','ऋ':'ri','ए':'e','ऐ':'ai','ओ':'o','औ':'au','अं':'an','अः':'ah',
+    'ा':'a','ि':'i','ी':'ee','ु':'u','ू':'oo','ृ':'ri','े':'e','ै':'ai','ो':'o','ौ':'au','ं':'n','ँ':'n','ः':'h','्':'','़':'',
+    'क':'k','ख':'kh','ग':'g','घ':'gh','ङ':'ng','च':'ch','छ':'chh','ज':'j','झ':'jh','ञ':'ny','ट':'t','ठ':'th','ड':'d','ढ':'dh','ण':'n',
+    'त':'t','थ':'th','द':'d','ध':'dh','न':'n','प':'p','फ':'ph','ब':'b','भ':'bh','म':'m','य':'y','र':'r','ल':'l','व':'v','श':'sh','ष':'sh','स':'s','ह':'h',
+    'क्ष':'ksh','त्र':'tr','ज्ञ':'gya','ड़':'d','ढ़':'dh','फ़':'f','ज़':'z','।':'.','॥':'.'
+  };
+  var out = "";
+  for (var i = 0; i < text.length; i++) {
+    var c = text.charAt(i);
+    out += map[c] !== undefined ? map[c] : c;
+  }
+  return out.replace(/[\u0900-\u097F]/g, "");
+}
 window.updateUserLive = function (text) {
+  text = _cleanDevanagariToHinglish(text);
   // Pro: garbled Japanese / non-Latin noise ko drop karo — bubble me \"ある\" nahi
   try{ if(!text || /^[\s\u3040-\u30FF\u4E00-\u9FFF\u3400-\u4DBF]+$/.test(String(text).trim())) return; }catch(e){}
   try{ var _t = String(text).trim(); if(_t.length<2 && /[^\x00-\x7F]/.test(_t) && !/[\u0900-\u097F]/.test(_t)) return; }catch(e){}
@@ -6815,6 +6833,15 @@ window._muskuCheckAudioIdle = function () {
 
   /* ---------- Browser mic (echoCancellation) -> /live WebSocket ---------- */
   (function MuskuBrowserMic() {
+    var backendHost = (window.MUSKU_BACKEND_URL || localStorage.getItem("musku_backend_url") || "").trim();
+    var wsHost = location.hostname || "127.0.0.1";
+    var wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    var _isLocal = wsHost === "localhost" || wsHost === "127.0.0.1" || wsHost === "";
+    var liveWsUrl = backendHost
+      ? (backendHost.startsWith("http") ? backendHost.replace(/^http/, "ws") : backendHost) + "/live"
+      : (_isLocal
+        ? wsProto + "//" + wsHost + ":8770/live"
+        : wsProto + "//" + location.host + "/live");
     var panel = document.getElementById("micPermPanel");
     var btn = document.getElementById("micPermBtn");
     var errEl = document.getElementById("micPermErr");
@@ -8220,7 +8247,8 @@ window._muskuCheckAudioIdle = function () {
           try{ if(location.hostname.endsWith("vercel.app") || location.hostname==="musku-ai.web.app") { /* prod: redirect */ setTimeout(function(){ location.href="signup.html"; }, 800); } }catch(e){}
           return;
         }
-        return fetch("/api/start",{method:"POST", headers:{"Content-Type":"application/json", "Authorization": "Bearer "+_tok}, body:JSON.stringify({uid:_uid, token:_tok, key:_key, greet:greet, script:greet})}).then(function(resp){
+        var _apiBase = (window.MUSKU_BACKEND_URL || localStorage.getItem("musku_backend_url") || "").trim().replace(/\/+$/, "");
+        return fetch(_apiBase + "/api/start",{method:"POST", headers:{"Content-Type":"application/json", "Authorization": "Bearer "+_tok}, body:JSON.stringify({uid:_uid, token:_tok, key:_key, greet:greet, script:greet})}).then(function(resp){
           if(resp.status===401){
             window.GreetingController.log("HTTP_QUEUE", false, "401 unauthorized — redirect to signup");
             try{ location.href="signup.html"; }catch(e){}
