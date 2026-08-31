@@ -61,3 +61,21 @@ def live_display_text(text: str) -> str:
     if out and _JAPANESE_RE.search(out):
         return ""
     return out.strip()
+
+
+_HUMOR_INDICATORS = (
+    "haha", "hehe", "huhu", "hihi", "lol", "rofl", "lmao", "joke", "chutkula",
+    "majak", "mazaak", "funny", "laugh", "pagal", "hasi", "hasna", "haso",
+    "😂", "🤣", "😃", "😄", "😆", "😜", "😹"
+)
+
+def filter_unnecessary_laughter(user_text: str, model_text: str) -> str:
+    """If user text does not contain explicit funny indicators, strip trailing 'hehe/haha' from model reply."""
+    if not model_text:
+        return model_text
+    u_low = (user_text or "").lower()
+    is_funny = any(w in u_low for w in _HUMOR_INDICATORS)
+    if not is_funny:
+        clean = re.sub(r"(?:\s*[\.,!]*\s*|\s+)(?:Hehe|hehe|Haha|haha|Hahaha|hahaha)[.!]*\s*$", "", model_text).strip()
+        return clean
+    return model_text

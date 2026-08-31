@@ -678,42 +678,41 @@ class MuskuLiveSession:
             if out_txt is not None and getattr(out_txt, "text", None):
                 txt = live_display_text(str(out_txt.text))
                 if txt.strip():
-                    # Greeting safety-net: greeting me hehe/haha hatao (only funny moment pe allowed)
-                    if self._greeted and (self._user_turn_buf.strip() in ("", "[START greeting]") or "[START greeting]" in self._user_turn_buf):
-                        txt = re.sub(r"\s*(Hehe|hehe|Haha|haha)[.!]*\s*$", "", txt).strip()
+                    from live.display_filter import filter_unnecessary_laughter
                     self._model_turn_buf = self._merge_transcript(self._model_turn_buf, txt)
+                    out_display = filter_unnecessary_laughter(self._user_turn_buf, self._model_turn_buf)
                     # store for echo suppression
                     try:
                         import time as _t
-                        self._last_model_text = self._model_turn_buf
+                        self._last_model_text = out_display
                         self._last_model_time = _t.time()
                     except Exception:
                         pass
-                    _live_dbg(f"[Musku-Live] Musku: {self._model_turn_buf[:80]}")
+                    _live_dbg(f"[Musku-Live] Musku: {out_display[:80]}")
                     # Greeting: both bubble text + voice (was voice-only, now both as per requirement)
                     await self._send({
                         "type": "transcription",
                         "role": "model",
-                        "text": self._model_turn_buf,
+                        "text": out_display,
                     })
             elif mt is not None and getattr(mt, "parts", None):
                 for part in mt.parts:
                     t = getattr(part, "text", None)
                     if t:
                         txt = live_display_text(str(t))
-                        if self._greeted and (self._user_turn_buf.strip() in ("", "[START greeting]") or "[START greeting]" in self._user_turn_buf):
-                            txt = re.sub(r"\s*(Hehe|hehe|Haha|haha)[.!]*\s*$", "", txt).strip()
+                        from live.display_filter import filter_unnecessary_laughter
                         self._model_turn_buf = self._merge_transcript(self._model_turn_buf, txt)
+                        out_display = filter_unnecessary_laughter(self._user_turn_buf, self._model_turn_buf)
                         try:
                             import time as _t
-                            self._last_model_text = self._model_turn_buf
+                            self._last_model_text = out_display
                             self._last_model_time = _t.time()
                         except Exception:
                             pass
                         await self._send({
                             "type": "transcription",
                             "role": "model",
-                            "text": self._model_turn_buf,
+                            "text": out_display,
                         })
                         break
 
