@@ -186,7 +186,7 @@ class BrowserLiveWSServer:
                 logger.debug("send_start_greeting inline: %s", e)
         else:
             key = uid or self._last_uid or "_default_"
-            self._pending_greetings[key] = script if script else True
+            self._pending_greetings[key] = script if isinstance(script, str) and script.strip() else None
 
     def send_proactive_prompt_direct(self, prompt: str, uid=None):
         """Proactive prompt as-is — target user's session."""

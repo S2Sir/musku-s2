@@ -81,7 +81,10 @@ _LAST_GREETING = {"text": None}
 def build_start_greeting_prompt(script: str | None = None, preferred_title: str | None = None) -> str:
     """START realtime voice greeting — har bar live alg lage (verbatim speak), repeat avoid."""
     import random
-    base = (script or get_respectful_start_greeting(preferred_title)).strip()
+    # guard: script may be True (old queue) or non-string
+    if script is True or not isinstance(script, str):
+        script = None
+    base = (script.strip() if isinstance(script, str) and script.strip() else get_respectful_start_greeting(preferred_title)).strip()
     # 20+ fully distinct final greetings — har START pe ek random verbatim bolega, isliye har bar alg
     variants = [
         f"{base}! Main bhi yahin hoon, ekdum ready, batao aaj kya kamaal karna hai?",

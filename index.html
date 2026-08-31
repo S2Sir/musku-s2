@@ -6800,10 +6800,7 @@ window._muskuCheckAudioIdle = function () {
       nextPlayTime = 0;
       _feedEndsAt = 0;
       window._muskuCheckAudioIdle && window._muskuCheckAudioIdle();
-      if (outCtx) {
-        try { outCtx.close(); } catch (e) {}
-        outCtx = null;
-      }
+      // keep AudioContext running for mobile (don't suspend/close — next reply needs no gesture)
     };
 
     window.muskuRestartSpeaker = function () {

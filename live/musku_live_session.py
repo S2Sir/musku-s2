@@ -235,7 +235,11 @@ class MuskuLiveSession:
                 # Flush any greeting queued before Gemini connected (e.g. /api/start)
                 if self._greet_on_connect or self._pending_greeting is not None:
                     try:
-                        await self.send_greeting(self._pending_greeting, force=True)
+                        # pending may be True from old queue (now None), handle bool
+                        pend = self._pending_greeting
+                        if pend is True:
+                            pend = None
+                        await self.send_greeting(pend, force=True)
                     except Exception as e:
                         logger.debug("pending greeting flush: %s", e)
                     finally:
@@ -542,14 +546,9 @@ class MuskuLiveSession:
                                 data = base64.b64decode(data)
                             except Exception:
                                 continue
-                        if len(data) < _MIN_AI_PCM:
-                            # Observable: don't silently drop — log telemetry
-                            try:
-                                _dbg_log(f"[AUDIO] dropped chunk={len(data)} bytes (<{_MIN_AI_PCM})")
-                                bus.publish("AUDIO_DROPPED", {"len": len(data)})
-                            except Exception:
-                                pass
+                        if len(data) < 32:  # tiny keepalive, ignore
                             continue
+                        # small tail (32-160) still play — was dropping greeting tail
                         if not self._logged_first_audio:
                             self._logged_first_audio = True
                             self._telemetry.mark("GEMINI_FIRST_AUDIO")
@@ -592,14 +591,16 @@ class MuskuLiveSession:
                                         if ratio > 0.65:
                                             logger.debug("Echo drop (greeting %.2f): user=%r model=%r", ratio, txt[:60], b[:60])
                                             _is_echo = True
-                                elif a in b or b in a:
-                                    logger.debug("Echo drop (substring): user=%r model=%r", txt[:60], b[:60])
+                                elif len(a) >= 10 and (a in b or b in a):
+                                    logger.debug("Echo drop (substring long): user=%r model=%r", txt[:60], b[:60])
                                     _is_echo = True
                                 else:
-                                    ratio = _dl.SequenceMatcher(None, a, b).ratio()
-                                    if ratio > 0.70:
-                                        logger.debug("Echo drop (%.2f): user=%r model=%r", ratio, txt[:60], b[:60])
-                                        _is_echo = True
+                                    # short hello/hi like "hello" (5 chars) in "arey hello hello..." should NOT be echo — real user turn
+                                    if len(a) >= 8 and len(b) >= 8:
+                                        ratio = _dl.SequenceMatcher(None, a, b).ratio()
+                                        if ratio > 0.70:
+                                            logger.debug("Echo drop (%.2f): user=%r model=%r", ratio, txt[:60], b[:60])
+                                            _is_echo = True
                 except Exception:
                     pass
                 if _is_echo:
