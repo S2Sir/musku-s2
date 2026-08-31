@@ -2469,8 +2469,8 @@
   }
 
   @media screen { /* MOBILE-ONLY DESIGN — hamesha active, PC pe bhi phone size */
-    html, body { overflow-y: auto; overflow-x: hidden; height: 100%; }
-    body { -webkit-tap-highlight-color: transparent; height: 100%; }
+    html, body { overflow-y: auto; overflow-x: hidden; height: 100%; height: 100dvh; overscroll-behavior-y: none; touch-action: manipulation; }
+    body { -webkit-tap-highlight-color: transparent; height: 100%; height: 100dvh; }
 
     .app {
       display: block;
@@ -6700,9 +6700,26 @@ window.updateChatTyping = function (on) {
       }
     };
 
-    document.addEventListener("click", function () {
-      ensureOutCtx();
-    }, { once: true, capture: true });
+    function unlockMobileWebAudio() {
+      try {
+        var ac = ensureOutCtx();
+        if (ac) {
+          if (ac.state === "suspended") {
+            ac.resume().catch(function () {});
+          }
+          // iOS Safari & Mobile Chrome require playing a silent buffer inside a touch event to unlock WebAudio
+          var buffer = ac.createBuffer(1, 1, ac.sampleRate || 24000);
+          var source = ac.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ac.destination);
+          source.start(0);
+        }
+      } catch (e) {}
+    }
+    window.unlockMobileWebAudio = unlockMobileWebAudio;
+    ["touchstart", "touchend", "click", "pointerdown"].forEach(function (evt) {
+      window.addEventListener(evt, unlockMobileWebAudio, { capture: true, passive: true });
+    });
 
     var _reportedPlayStart = false;
     var _idleProbeTimer = null;
