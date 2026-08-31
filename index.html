@@ -6756,8 +6756,21 @@ window.updateChatTyping = function (on) {
       var pcm = new Int16Array(bytes.buffer);
       var f32 = new Float32Array(pcm.length);
       for (var j = 0; j < pcm.length; j++) f32[j] = pcm[j] / 32768;
-      var buf = ac.createBuffer(1, f32.length, OUT_RATE);
-      buf.getChannelData(0).set(f32);
+      var targetRate = (ac && ac.sampleRate) ? ac.sampleRate : OUT_RATE;
+      var f32Final = f32;
+      if (targetRate !== OUT_RATE && typeof resampleF32 === "function") {
+        f32Final = resampleF32(f32, OUT_RATE, targetRate);
+      }
+      var buf;
+      try {
+        buf = ac.createBuffer(1, f32Final.length, targetRate);
+      } catch (e) {
+        try {
+          buf = ac.createBuffer(1, f32.length, OUT_RATE);
+          f32Final = f32;
+        } catch (e2) { return; }
+      }
+      buf.getChannelData(0).set(f32Final);
       var src = ac.createBufferSource();
       src.buffer = buf;
       var dest = masterGain || ac.destination;
