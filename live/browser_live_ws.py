@@ -277,7 +277,24 @@ class BrowserLiveWSServer:
                 hdr_dict = dict(headers) if hasattr(headers, "items") else {}
             except Exception:
                 hdr_dict = {}
+            # POST body: websockets Request has no body attr, try connection reader
             body = getattr(request, "body", b"") or b""
+            if not body and method == "POST":
+                clen = 0
+                try:
+                    clen = int(hdr_dict.get("Content-Length") or hdr_dict.get("content-length") or hdr_dict.get("Content-length") or "0")
+                except Exception:
+                    clen = 0
+                if clen > 0 and clen <= 20*1024:
+                    try:
+                        # Try to read from connection stream if available (single-port POST)
+                        reader = getattr(connection, "reader", None) or getattr(getattr(connection, "protocol", None), "reader", None)
+                        if reader and hasattr(reader, "readexactly"):
+                            body = await reader.readexactly(clen)
+                        elif hasattr(connection, "read"):
+                            body = await connection.read(clen)
+                    except Exception:
+                        body = b""
             if isinstance(body, str):
                 body = body.encode("utf-8")
             # Parse path and query
