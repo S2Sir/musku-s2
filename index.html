@@ -8386,10 +8386,11 @@ window._muskuCheckAudioIdle = function () {
         }, 700);
       }
       setTimeout(function () {
-        var _shouldAutoWs = false; try{ _shouldAutoWs = (typeof isVoiceActive==="function" && isVoiceActive()) || (typeof window.isVoiceActive==="function" && window.isVoiceActive()) || !!window._muskuLocalActive || !!window._muskuVoiceActiveFlag || (localStorage.getItem("musku_voice_active_v1")==="1"); }catch(e){ _shouldAutoWs=false; }
-        if (!_shouldAutoWs) return; // STOP ke baad auto WS nahi — START tak OFF
-        if (typeof connectLiveWs === "function") connectLiveWs().catch(function () {});
-      }, 300);
+        // Pre-warm Gemini WS connection on page load for instant zero-delay START
+        if (typeof connectLiveWs === "function") {
+          connectLiveWs().catch(function () {});
+        }
+      }, 150);
     })();
 })();
 </script>
