@@ -277,26 +277,19 @@ class BrowserLiveWSServer:
                 hdr_dict = dict(headers) if hasattr(headers, "items") else {}
             except Exception:
                 hdr_dict = {}
-            # POST body: websockets Request has no body attr, try connection reader
-            body = getattr(request, "body", b"") or b""
-            if not body and method == "POST":
-                clen = 0
-                try:
-                    clen = int(hdr_dict.get("Content-Length") or hdr_dict.get("content-length") or hdr_dict.get("Content-length") or "0")
-                except Exception:
-                    clen = 0
-                if clen > 0 and clen <= 20*1024:
-                    try:
-                        # Try to read from connection stream if available (single-port POST)
-                        reader = getattr(connection, "reader", None) or getattr(getattr(connection, "protocol", None), "reader", None)
-                        if reader and hasattr(reader, "readexactly"):
-                            body = await reader.readexactly(clen)
-                        elif hasattr(connection, "read"):
-                            body = await connection.read(clen)
-                    except Exception:
-                        body = b""
-            if isinstance(body, str):
-                body = body.encode("utf-8")
+            # POST body: websockets Request has no body (handshake only). For single-port HTTP, body is not available here,
+            # but /api/start only needs Authorization header (token) which is in headers, so empty body still queues greeting via token.
+            # Don't try to read from connection.reader (blocks → 502), use empty.
+            body = b""
+            # Try request.body if ever present (future websockets version)
+            try:
+                b2 = getattr(request, "body", None)
+                if isinstance(b2, (bytes, bytearray)) and b2:
+                    body = bytes(b2)
+                elif isinstance(b2, str) and b2:
+                    body = b2.encode("utf-8")
+            except Exception:
+                body = b""
             # Parse path and query
             parsed = urllib.parse.urlparse(path)
             environ = {
