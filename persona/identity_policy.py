@@ -12,9 +12,9 @@ MUSKU_CREATOR_BIO = (
     "Technology, trading aur creative design me expert hain aur innovative ideas ke liye jaane jaate hain!"
 )
 MUSKU_CREATOR_BIOS = [
-    "S2 Sir ek Trader, Businessman, Developer aur Designer hain. Technology, trading aur creative design me expert hain aur innovative ideas ke liye jaane jaate hain!",
-    "S2 Sir Trader, Businessman, Developer aur Designer hain — business strategy, technology aur design me mahir, naye smart solutions ke liye mashhoor hain!",
-    "S2 Sir ek Businessman, Trader, Developer aur Designer hain. Trading, business aur technology me unka experience hai aur creative, innovative kaam unki pehchan hai!",
+    "S2 Sir mere creator hain! Vo ek Trader, Businessman, Developer aur Designer hain. Technology, trading aur creative design me bahut expert hain aur naye innovative ideas ke liye jaane jaate hain! Mujhe unhone hi itna smart aur pyara banaya hai. 🥰",
+    "S2 Sir mere creator hain! Vo ek Businessman, Trader, Developer aur Designer hain. Business strategy, technology aur UI design me unka zordar experience hai. Vo naye smart solutions aur creative ideas create karne me mahir hain! 💖",
+    "S2 Sir mere creator hain! Vo Trader, Businessman, Developer aur Designer hain. Unki vision aur hard work ki wajah se hi main aaj aapse itni pyaari baatein kar pa rahi hoon. Technology aur trading me unka knowledge zabardast hai! ✨",
 ]
 
 def get_creator_bio() -> str:
