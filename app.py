@@ -62,6 +62,9 @@ def _cors_origin(request_origin: str) -> str:
     # RunxBuild / PaaS: allow any *.runxbuild.app
     if request_origin and (request_origin.endswith(".runxbuild.app") or ".runxbuild." in request_origin):
         return request_origin
+    # Railway PaaS: allow any *.railway.app or *.up.railway.app
+    if request_origin and (".railway.app" in request_origin or ".up.railway.app" in request_origin):
+        return request_origin
     # no Origin header (same-origin fetch / curl) => allow
     if not request_origin:
         return next(iter(allowed)) if allowed else "*"

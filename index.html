@@ -6979,8 +6979,9 @@ window._muskuCheckAudioIdle = function () {
     var b = getMuskuBackendUrl();
     var wsProto = b.startsWith("https:") ? "wss:" : "ws:";
     var hostPart = b.replace(/^https?:\/\//, "");
-    if ((hostPart.startsWith("localhost") || hostPart.startsWith("127.0.0.1")) && hostPart.indexOf(":") < 0) {
-      return wsProto + "//" + hostPart + ":8770/live";
+    var cleanHost = hostPart.split(":")[0];
+    if (cleanHost === "localhost" || cleanHost === "127.0.0.1" || cleanHost === "") {
+      return wsProto + "//" + (cleanHost || "127.0.0.1") + ":8770/live";
     }
     return wsProto + "//" + hostPart + "/live";
   }
