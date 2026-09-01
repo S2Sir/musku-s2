@@ -1,13 +1,13 @@
 {
     "important_facts": [
         {
-            "id": "f0c53e80",
+            "id": "1cc75ae9",
             "fact": "F secure fact A",
             "source": "",
-            "t": "2026-09-01 11:36",
+            "t": "2026-09-01 11:44",
             "importance": 0.9,
             "times_mentioned": 1,
-            "last_seen": "2026-09-01 11:36"
+            "last_seen": "2026-09-01 11:44"
         }
     ]
 }

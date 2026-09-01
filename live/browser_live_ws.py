@@ -376,30 +376,33 @@ class BrowserLiveWSServer:
         import os
         http_port = int(os.environ.get("PORT", "8000"))
         single_port = (port == http_port)
-        if single_port:
-            self._server = await websockets.serve(
-                self._handler,
-                host,
-                port,
-                ping_interval=20,
-                ping_timeout=120,
-                max_size=2_000_000,
-                process_request=self._process_http,
-            )
-        else:
-            self._server = await websockets.serve(
-                self._handler,
-                host,
-                port,
-                ping_interval=20,
-                ping_timeout=120,
-                max_size=2_000_000,
-            )
-        mode = "inline"
-        logger.info("Browser Live WS (%s) on ws://%s:%s/live", mode, host, port)
-        print(f"[LiveWS] /live on ws://{host}:{port}/live ({mode} mode)")
         try:
+            if single_port:
+                self._server = await websockets.serve(
+                    self._handler,
+                    host,
+                    port,
+                    ping_interval=20,
+                    ping_timeout=120,
+                    max_size=2_000_000,
+                    process_request=self._process_http,
+                )
+            else:
+                self._server = await websockets.serve(
+                    self._handler,
+                    host,
+                    port,
+                    ping_interval=20,
+                    ping_timeout=120,
+                    max_size=2_000_000,
+                )
+            mode = "inline"
+            logger.info("Browser Live WS (%s) on ws://%s:%s/live", mode, host, port)
+            print(f"[LiveWS] /live on ws://{host}:{port}/live ({mode} mode)")
             await asyncio.Future()
+        except Exception as ws_err:
+            logger.warning("BrowserLiveWS port bind warning (%s:%s): %s", host, port, ws_err)
+            print(f"[LiveWS Warning] Could not bind ws://{host}:{port}/live ({ws_err})")
         finally:
             if self._server:
                 self._server.close()

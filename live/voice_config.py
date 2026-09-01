@@ -111,7 +111,7 @@ BROWSER_AUDIO_PLAYBACK = True
 BROWSER_LIVE_WS = True
 BROWSER_LIVE_WS_HOST = os.environ.get("MUSKU_LIVE_WS_HOST", "0.0.0.0")
 # PaaS (RunxBuild/HF/Render) only exposes $PORT — if MUSKU_LIVE_WS_PORT not set, share HTTP PORT so single public port serves both / and /live
-BROWSER_LIVE_WS_PORT = int(os.environ.get("MUSKU_LIVE_WS_PORT", os.environ.get("PORT", "8770")))
+BROWSER_LIVE_WS_PORT = int(os.environ.get("MUSKU_LIVE_WS_PORT", "8770"))
 
 # Musku inline Live — thin /live bridge, Gemini session per browser WS client
 MUSKU_INLINE_LIVE = _env_bool(
