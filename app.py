@@ -680,21 +680,37 @@ def main():
     print("==================================================")
     print("MUSKU 2.0 - Web AI Companion Server")
     print("==================================================")
-    cfg = load_config()
-    print(f"User Name: {cfg.get('user_name', 'aap')}")
-    print(f"Language: {cfg.get('language', 'hinglish')}")
+    print(f"[MUSKU] Binding HTTP server on 0.0.0.0:{PORT}")
 
-    # Start Live WebSocket Voice Server on daemon thread
+    # CRITICAL FOR RAILWAY PaaS: Start HTTP server FIRST on a daemon thread
+    # so the port is listening immediately for Railway health checks.
+    http_thread = threading.Thread(target=start_http_server, daemon=True, name="MuskuHTTP")
+    http_thread.start()
+    print(f"[MUSKU] HTTP server thread started on 0.0.0.0:{PORT}")
+
+    # Now start Live WebSocket Voice Server (non-critical for initial load)
     try:
         browser_live_ws.start()
-        print(f"[Live Voice WS] Server active for voice companion")
+        print(f"[LiveWS] Voice WebSocket started")
     except Exception as e:
-        print(f"[Live WS Warning]: {e}")
+        print(f"[LiveWS Warning]: {e}")
 
-    # Start Web Asset Server on http://0.0.0.0:PORT (main process for Railway PaaS)
-    print(f"\nMUSKU 2.0 Web is 100% Ready!")
-    print(f"Listening on http://0.0.0.0:{PORT}\n")
-    start_http_server()
+    try:
+        cfg = load_config()
+        print(f"User Name: {cfg.get('user_name', 'aap')}")
+        print(f"Language: {cfg.get('language', 'hinglish')}")
+    except Exception as e:
+        print(f"[Config Warning]: {e}")
+
+    print(f"\nMUSKU 2.0 Web is 100% Ready! Open: http://0.0.0.0:{PORT}\n")
+
+    # Block main thread forever (daemon threads keep running)
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n👋 MUSKU Web Server stopping...")
+        browser_live_ws.stop()
 
 
 if __name__ == "__main__":
