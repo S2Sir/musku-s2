@@ -657,8 +657,15 @@ def handler(environ, start_response):
     start_response("404 Not Found", [("Content-Type", "application/json")])
     return [json.dumps({"error": "not found"}).encode("utf-8")]
 
-# Vercel top-level app alias
+# Vercel / Gunicorn top-level app alias
 app = handler
+
+# Auto-start Live WS background server on WSGI load (Gunicorn / Uvicorn)
+try:
+    if not getattr(browser_live_ws, "running", False):
+        browser_live_ws.start()
+except Exception:
+    pass
 
 
 def main():
