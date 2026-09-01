@@ -386,6 +386,16 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.path = "/index.html"
         return super().do_GET()
 
+    def end_headers(self):
+        clean_p = self.path.split("?")[0]
+        if clean_p.endswith(".html") or clean_p in ("/", ""):
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+        else:
+            self.send_header("Cache-Control", "public, max-age=60")
+        super().end_headers()
+
 
 def start_http_server():
     http.server.ThreadingHTTPServer.allow_reuse_address = True
