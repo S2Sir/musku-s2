@@ -405,8 +405,8 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 def start_http_server():
     http.server.ThreadingHTTPServer.allow_reuse_address = True
-    with http.server.ThreadingHTTPServer(("", PORT), MuskuHTTPRequestHandler) as httpd:
-        print(f"[MUSKU 2.0 Web] Server live at http://localhost:{PORT}")
+    with http.server.ThreadingHTTPServer(("0.0.0.0", PORT), MuskuHTTPRequestHandler) as httpd:
+        print(f"[MUSKU 2.0 Web] Server live at http://0.0.0.0:{PORT}")
         httpd.serve_forever()
 
 

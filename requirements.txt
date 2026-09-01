@@ -6,4 +6,6 @@ websockets>=12.0
 cryptography>=42.0
 firebase-admin>=6.4.0
 google-cloud-firestore>=2.15.0
-# Force Docker layer rebuild trigger: v2026_09_01_1052
+gunicorn>=21.2.0
+uvicorn>=0.23.0
+# Force Docker layer rebuild trigger: v2026_09_01_1156
