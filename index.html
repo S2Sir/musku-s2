@@ -8412,45 +8412,8 @@ window._muskuCheckAudioIdle = function () {
       try{ window.GreetingController.log("MIC", true, window.muskuMicGranted ? "already granted" : "skip"); }catch(e){}
     }
 
-    // 2. WS_CONNECTING — WS primary + HTTP /api/start backup queue (no duplicate voice, queue-safe)
-    try{ window.GreetingController.set("WS_CONNECTING"); window.GreetingController.log("WS", true, "connecting "+(typeof liveWsUrl!=="undefined"?liveWsUrl:"")); }catch(e){}
-    // HTTP backup queue — WS fail/race ho toh browser_live_ws pending se flush hoga (no extra voice)
-    // Vercel fix: fresh Firebase ID token lo, 401 pe signup pe redirect (no spam)
-    try{
-      var _uid = (typeof getMuskuUid==="function" ? getMuskuUid() : (window.getMuskuUid?window.getMuskuUid():"owner"));
-      var _tokCached = (typeof getMuskuToken==="function" ? getMuskuToken() : (window.getMuskuToken?window.getMuskuToken():""));
-      var _key = (function(){ try{ if(typeof getMuskuApiKey==="function") return getMuskuApiKey()||""; if(typeof getKey==="function") return getKey()||""; return localStorage.getItem("musku_api_key")||""; }catch(e){ return ""; }})();
-      var _tokPromise = Promise.resolve(_tokCached);
-      try{
-        if(typeof firebase!=="undefined" && firebase.apps && firebase.apps.length && firebase.auth().currentUser){
-          _tokPromise = firebase.auth().currentUser.getIdToken(false).then(function(t){
-            try{ localStorage.setItem("musku_id_token", t); }catch(e){}
-            return t;
-          }).catch(function(){ return _tokCached; });
-        }
-      }catch(e){}
-      _tokPromise.then(function(_tok){
-        if(!_tok){
-          window.GreetingController.log("HTTP_QUEUE", false, "no token — please Sign in with Google (signup.html)");
-          try{ if(location.hostname.endsWith("vercel.app") || location.hostname==="musku-ai.web.app") { /* prod: redirect */ setTimeout(function(){ location.href="signup.html"; }, 800); } }catch(e){}
-          return;
-        }
-        var _apiBase = typeof getMuskuBackendUrl === "function" ? getMuskuBackendUrl() : "https://musku-s2.up.railway.app";
-        return fetch(_apiBase + "/api/start",{method:"POST", headers:{"Content-Type":"application/json", "Authorization": "Bearer "+_tok}, body:JSON.stringify({uid:_uid, token:_tok, key:_key, greet:greet, script:greet})}).then(function(resp){
-          if(resp.status===401){
-            window.GreetingController.log("HTTP_QUEUE", false, "401 unauthorized — redirect to signup");
-            try{ location.href="signup.html"; }catch(e){}
-            throw new Error("unauthorized");
-          }
-          window.GreetingController.log("HTTP_QUEUE", true, "POST /api/start ok "+resp.status);
-          return resp;
-        }).catch(function(err){
-          var msg = err && err.message || "fetch fail";
-          if(msg!=="unauthorized") window.GreetingController.log("HTTP_QUEUE", false, msg);
-        });
-      });
-      window.GreetingController.log("HTTP_QUEUE", true, "POST /api/start queued with fresh token");
-    }catch(e){ window.GreetingController.log("HTTP_QUEUE", false, e.message); }
+    // 2. ONE PERSISTENT SESSION — Connect Live WebSocket directly (no HTTP /api/start duplication)
+    try{ window.GreetingController.set("WS_CONNECTING"); window.GreetingController.log("WS", true, "connecting "+(typeof getLiveWsUrl==="function"?getLiveWsUrl():liveWsUrl)); }catch(e){}
     connectLiveWs().then(function () {
       var wsOk = window.muskuLiveWs && window.muskuLiveWs.readyState === WebSocket.OPEN;
       if(!wsOk){
@@ -8459,7 +8422,7 @@ window._muskuCheckAudioIdle = function () {
         return;
       }
       try{ window.GreetingController.set("WS_READY"); window.GreetingController.log("WS", true, "OPEN"); }catch(e){}
-      // 3. Wait GEMINI_READY — 14s timeout (Railway cold start ~5-8s, slow mobile network ke liye)
+      // 3. Wait GEMINI_READY — 14s timeout (Railway cold start ~5-8s, slow mobile network)
       window.GreetingController.waitGeminiReady(14000).then(function(){
         try{ window.GreetingController.set("GREETING_SENDING"); window.GreetingController.log("GREETING", true, "ONE event: "+greet); }catch(e){}
         window.muskuLiveWs.send(JSON.stringify({ type:"text", text: "[INTERNAL - START GREETING: " + greet + "]" }));
@@ -8470,12 +8433,11 @@ window._muskuCheckAudioIdle = function () {
           if (!audioBusy) try{ resumeListening(); }catch(e){}
         }, 600);
       }).catch(function(err){
-        // PERMANENT FIX: Gemini timeout pe immediately reconnect karo (Railway cold start slow hoga)
+        // Gemini timeout — silent reconnect without sound or duplicate greeting
         try{ window.GreetingController.set("GREETING_FAILED"); window.GreetingController.log("GREETING", false, err && err.message); }catch(e){}
         var _stillActive = !!window._muskuVoiceActiveFlag || !!window._muskuLocalActive;
         if (_stillActive) {
           setStatus("thinking", "Reconnecting...");
-          // Close stale WS, reconnect fresh
           try{ if(liveWs){ liveWs.onclose=null; liveWs.close(); liveWs=null; window.muskuLiveWs=null; } }catch(e){}
           setTimeout(function(){
             if (window._muskuVoiceActiveFlag || window._muskuLocalActive) {
@@ -8496,7 +8458,7 @@ window._muskuCheckAudioIdle = function () {
         }
       });
     }).catch(function (err) {
-      // PERMANENT FIX: WS connect fail pe bhi auto-retry (500ms baad)
+      // WS connect fail — silent retry without chimes
       try{ window.GreetingController.set("WS_FAILED"); window.GreetingController.log("WS", false, err && err.message); }catch(e){}
       var _stillOn = !!window._muskuVoiceActiveFlag || !!window._muskuLocalActive;
       if (_stillOn) {
