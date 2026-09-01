@@ -6749,27 +6749,34 @@ window.updateChatTyping = function (on) {
 
     function unlockMobileWebAudio() {
       try {
-        var ac = ensureOutCtx();
+        // CRITICAL for mobile: create AND resume AudioContext inside user gesture
+        // Mobile Chrome/Safari block WebAudio PERMANENTLY if first AudioContext was created outside a gesture
+        var ac = ensureOutCtx();   // creates outCtx if not exists
         if (ac) {
           if (ac.state === "suspended") {
             ac.resume().catch(function () {});
           }
-          // iOS Safari & Mobile Chrome require playing a silent buffer inside a touch event to unlock WebAudio
-          var buffer = ac.createBuffer(1, 1, ac.sampleRate || 24000);
-          var source = ac.createBufferSource();
-          source.buffer = buffer;
-          source.connect(ac.destination);
-          source.start(0);
-        }
-        var mAud = getMobileHtml5Audio();
-        if (mAud && mAud.paused) {
-          mAud.play().catch(function(){});
+          // Play a REAL silent 1-sample buffer — this is what unlocks hardware audio on iOS & Android
+          try {
+            var silentBuf = ac.createBuffer(1, 1, ac.sampleRate || 24000);
+            var silentSrc = ac.createBufferSource();
+            silentSrc.buffer = silentBuf;
+            silentSrc.connect(ac.destination);
+            silentSrc.start(0);
+          } catch(e2) {}
         }
       } catch (e) {}
     }
     window.unlockMobileWebAudio = unlockMobileWebAudio;
+    // Pre-warm: unlock on FIRST user gesture anywhere on page (before START button press)
+    var _audioUnlocked = false;
+    function _onFirstGesture() {
+      if (_audioUnlocked) return;
+      _audioUnlocked = true;
+      unlockMobileWebAudio();
+    }
     ["touchstart", "touchend", "click", "pointerdown"].forEach(function (evt) {
-      window.addEventListener(evt, unlockMobileWebAudio, { capture: true, passive: true });
+      window.addEventListener(evt, _onFirstGesture, { capture: true, passive: true });
     });
 
     var _reportedPlayStart = false;
