@@ -6952,17 +6952,46 @@ window._muskuCheckAudioIdle = function () {
     };
   })();
 
+  /* ---------- Backend & WebSocket URL Helpers (Universal for Web, Mobile, Firebase, DevTools) ---------- */
+  function getMuskuBackendUrl() {
+    var custom = (window.MUSKU_BACKEND_URL || localStorage.getItem("musku_backend_url") || "").trim();
+    // Auto-fix stale/typo railway URL (e.g. musku-s2.up.railway.app -> musku-s2-production.up.railway.app)
+    if (custom && custom.indexOf("musku-s2.up.railway.app") >= 0 && custom.indexOf("musku-s2-production.up.railway.app") < 0) {
+      custom = custom.replace("musku-s2.up.railway.app", "musku-s2-production.up.railway.app");
+      try { localStorage.setItem("musku_backend_url", custom); } catch(e) {}
+    }
+    if (custom) return custom.replace(/\/+$/, "");
+
+    var h = (typeof location !== "undefined" && location.hostname) ? location.hostname : "";
+    var proto = (typeof location !== "undefined" && location.protocol === "https:") ? "https:" : "http:";
+
+    // If running directly on Railway production app:
+    if (h.indexOf("railway.app") >= 0) {
+      return location.origin;
+    }
+    // Local development:
+    if (h === "localhost" || h === "127.0.0.1" || h === "") {
+      return proto + "//" + (h || "127.0.0.1") + (location.port ? ":" + location.port : ":8000");
+    }
+    // Running from Firebase Hosting (musku-ai.web.app), Vercel, DevTools, or Web Extension:
+    return "https://musku-s2-production.up.railway.app";
+  }
+  window.getMuskuBackendUrl = getMuskuBackendUrl;
+
+  function getLiveWsUrl() {
+    var b = getMuskuBackendUrl();
+    var wsProto = b.startsWith("https:") ? "wss:" : "ws:";
+    var hostPart = b.replace(/^https?:\/\//, "");
+    if ((hostPart.startsWith("localhost") || hostPart.startsWith("127.0.0.1")) && hostPart.indexOf(":") < 0) {
+      return wsProto + "//" + hostPart + ":8770/live";
+    }
+    return wsProto + "//" + hostPart + "/live";
+  }
+  window.getLiveWsUrl = getLiveWsUrl;
+
   /* ---------- Browser mic (echoCancellation) -> /live WebSocket ---------- */
   (function MuskuBrowserMic() {
-    var backendHost = (window.MUSKU_BACKEND_URL || localStorage.getItem("musku_backend_url") || "").trim();
-    var wsHost = location.hostname || "127.0.0.1";
-    var wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    var _isLocal = wsHost === "localhost" || wsHost === "127.0.0.1" || wsHost === "";
-    var liveWsUrl = backendHost
-      ? (backendHost.startsWith("http") ? backendHost.replace(/^http/, "ws") : backendHost) + "/live"
-      : (_isLocal
-        ? wsProto + "//" + wsHost + ":8770/live"
-        : wsProto + "//" + location.host + "/live");
+    var liveWsUrl = getLiveWsUrl();
     var panel = document.getElementById("micPermPanel");
     var btn = document.getElementById("micPermBtn");
     var errEl = document.getElementById("micPermErr");
@@ -6978,14 +7007,6 @@ window._muskuCheckAudioIdle = function () {
     var browserMicOn = true;
     var liveWsOn = true;
     var liveWs = null;
-    var wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    var wsHost = location.hostname || "127.0.0.1";
-    // Dev (localhost): WS on :8770. Prod/PaaS (RunxBuild/HF/Render/nginx HTTPS): same-origin /live
-    // Single-port mode: backend serves HTTP + WS on same $PORT, so use location.host
-    var _isLocal = wsHost === "localhost" || wsHost === "127.0.0.1" || wsHost === "";
-    var liveWsUrl = _isLocal
-      ? wsProto + "//" + wsHost + ":8770/live"
-      : wsProto + "//" + location.host + "/live";
 
     /* Multi-tenant: stable per-browser user id (anonymous UUID) sent to the
        server so storage + persona are scoped per user. Reuses Google login uid
@@ -7039,7 +7060,7 @@ window._muskuCheckAudioIdle = function () {
           var _u=null; try{ var _a=JSON.parse(localStorage.getItem("musku_auth_user")||"null"); if(_a && _a.uid) _u=_a.uid; }catch(e){}
           if(!_u) try{ _u=getMuskuUid(); }catch(e){}
           // use fresh token if available
-          var _fresh=function(t){ try{ fetch("/api/save-key",{method:"POST",headers:{"Content-Type":"application/json", "Authorization": t? "Bearer "+t : ""},body:JSON.stringify({uid:_u, token:t, key:k})}).catch(function(){}); }catch(e){} };
+          var _fresh=function(t){ try{ fetch((window.getMuskuBackendUrl?window.getMuskuBackendUrl():"") + "/api/save-key",{method:"POST",headers:{"Content-Type":"application/json", "Authorization": t? "Bearer "+t : ""},body:JSON.stringify({uid:_u, token:t, key:k})}).catch(function(){}); }catch(e){} };
           try{ if(typeof firebase!=="undefined" && firebase.auth().currentUser){ firebase.auth().currentUser.getIdToken(true).then(function(t){ try{ localStorage.setItem("musku_id_token", t); }catch(e){} _fresh(t); }).catch(function(){ var _t=""; try{ _t=localStorage.getItem("musku_id_token")||""; }catch(e){} _fresh(_t); }); }else{ var _t=""; try{ _t=localStorage.getItem("musku_id_token")||""; }catch(e){} _fresh(_t); } }catch(e){}
         }
       }catch(e){}
@@ -7056,7 +7077,7 @@ window._muskuCheckAudioIdle = function () {
               if(anonKey && !curKey){
                 try{ localStorage.setItem("musku_api_key_"+user.uid, anonKey); }catch(e){}
                 // also push to Firestore with fresh token
-                user.getIdToken(true).then(function(t){ try{ localStorage.setItem("musku_id_token", t); }catch(e){} try{ fetch("/api/save-key",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+t},body:JSON.stringify({uid:user.uid, token:t, key:anonKey})}).catch(function(){}); }catch(e){} }).catch(function(){});
+                user.getIdToken(true).then(function(t){ try{ localStorage.setItem("musku_id_token", t); }catch(e){} try{ fetch((window.getMuskuBackendUrl?window.getMuskuBackendUrl():"") + "/api/save-key",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+t},body:JSON.stringify({uid:user.uid, token:t, key:anonKey})}).catch(function(){}); }catch(e){} }).catch(function(){});
               }
             }
           }catch(e){}
@@ -7260,7 +7281,7 @@ window._muskuCheckAudioIdle = function () {
     }
 
     function _buildWsUrl(tok) {
-      var base = liveWsUrl.split("?")[0];
+      var base = (typeof getLiveWsUrl === "function" ? getLiveWsUrl() : liveWsUrl).split("?")[0];
       var uid = (typeof getMuskuUid==="function"?getMuskuUid():(window.getMuskuUid?window.getMuskuUid():"owner"));
       var k = (typeof getMuskuApiKey==="function"?getMuskuApiKey():(localStorage.getItem("musku_api_key")||""));
       var url = base + "?uid=" + encodeURIComponent(uid);
@@ -7282,7 +7303,7 @@ window._muskuCheckAudioIdle = function () {
       return _getFreshToken().then(function(freshToken) {
         return new Promise(function (resolve, reject) {
           var _wsUrl;
-          try { _wsUrl = _buildWsUrl(freshToken); } catch(e) { _wsUrl = liveWsUrl; }
+          try { _wsUrl = _buildWsUrl(freshToken); } catch(e) { _wsUrl = (typeof getLiveWsUrl === "function" ? getLiveWsUrl() : liveWsUrl); }
           try {
             liveWs = new WebSocket(_wsUrl);
             window.muskuLiveWs = liveWs;
@@ -7296,7 +7317,6 @@ window._muskuCheckAudioIdle = function () {
             resolve();
           };
           liveWs.onerror = function () {
-            console.warn("Live WS connect failed — falling back.");
             reject(new Error("Live WS connect fail"));
           };
           liveWs.onclose = function (ev) {
@@ -8085,7 +8105,7 @@ window._muskuCheckAudioIdle = function () {
 
     // 1. Try Desktop Musku Brain API (/api/chat) with 8s abort
     var ctrl = null; try { ctrl = new AbortController(); setTimeout(function(){ try{ctrl.abort();}catch(e){} }, 8000); } catch(e){}
-    fetch("/api/chat", {
+    fetch((window.getMuskuBackendUrl ? window.getMuskuBackendUrl() : "") + "/api/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -8420,8 +8440,7 @@ window._muskuCheckAudioIdle = function () {
           try{ if(location.hostname.endsWith("vercel.app") || location.hostname==="musku-ai.web.app") { /* prod: redirect */ setTimeout(function(){ location.href="signup.html"; }, 800); } }catch(e){}
           return;
         }
-        var _fallbackOrigin = (typeof location !== "undefined" && location.protocol && location.protocol.indexOf("http") === 0) ? location.origin : "https://musku-s2-production.up.railway.app";
-        var _apiBase = (window.MUSKU_BACKEND_URL || localStorage.getItem("musku_backend_url") || _fallbackOrigin).trim().replace(/\/+$/, "");
+        var _apiBase = typeof getMuskuBackendUrl === "function" ? getMuskuBackendUrl() : "https://musku-s2-production.up.railway.app";
         return fetch(_apiBase + "/api/start",{method:"POST", headers:{"Content-Type":"application/json", "Authorization": "Bearer "+_tok}, body:JSON.stringify({uid:_uid, token:_tok, key:_key, greet:greet, script:greet})}).then(function(resp){
           if(resp.status===401){
             window.GreetingController.log("HTTP_QUEUE", false, "401 unauthorized — redirect to signup");
