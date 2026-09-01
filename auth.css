@@ -61,7 +61,8 @@ button, .gbtn, .skip-btn, .funded-opt, .funded-cta, .key-activate, .key-copy, .l
 .skip-btn:hover{ border-color:var(--a1); background:color-mix(in srgb, var(--a1) 14%, transparent); }
 .mini-note{ font-size:10px; color:#6b6b80; text-align:center; margin-top:10px; line-height:1.5; }
 .mini-note a{ color:var(--a2); text-decoration:none; border-bottom:1px dashed color-mix(in srgb, var(--a2) 40%, transparent); }
-.auth-foot{ text-align:center; margin-top:16px; font-size:10px; color:#6b6b80; position:relative; z-index:1; }
+.auth-foot{ text-align:center; margin-top:20px; padding-bottom:12px; font-size:11.5px; font-weight:700; color:#b0b5cf; letter-spacing:0.5px; position:relative; z-index:1; }
+.auth-foot .s2-craft{ color:var(--a1, #c084fc); font-weight:800; }
 .auth-toast{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(12px); background:rgba(14,12,30,.96); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:12px; font-size:12px; font-weight:700; box-shadow:0 12px 40px rgba(0,0,0,.5); opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:99; max-width:90vw; text-align:center; }
 .auth-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
