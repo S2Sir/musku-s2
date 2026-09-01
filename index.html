@@ -908,12 +908,16 @@
   .musku-img {
     position: absolute; left: 50%; top: 50%;
     width: 450px; height: 450px;
-    transform: translate(-50%,-50%);
+    transform: translate(-50%,-50%) translateZ(0);
     border-radius: 50%; overflow: hidden;
     z-index: 5;
     border: 2px solid rgba(192,132,252,.45);
     box-shadow: 0 0 26px var(--accent), 0 0 70px rgba(192,132,252,.35);
     animation: faceGlow 4.2s ease-in-out infinite;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    will-change: box-shadow;
+    isolation: isolate;
   }
   /* TRY avatar 2T is 9:16 portrait — full body visible, no crop, circle unchanged */
   .musku-img.try-portrait { padding: 0; background: #000; }
@@ -2446,11 +2450,14 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 2px; color: var(--dim); font-family: inherit;
     font-size: clamp(8px, 2.2vw, 10px); font-weight: 800; letter-spacing: 0.8px;
-    min-height: 44px; transition: color .2s ease;
+    min-height: 44px; transition: color .15s ease;
     -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
     padding: 0 2px;
   }
-  .m-tab .m-ico { font-size: clamp(16px, 5vw, 20px); line-height: 1; filter: grayscale(.6) opacity(.7); transition: filter .2s ease, transform .2s ease;
+  .m-tab .m-ico { font-size: clamp(16px, 5vw, 20px); line-height: 1; filter: grayscale(.6) opacity(.7); transition: filter .1s ease, transform .1s ease;
     width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; }
   .m-ico-live { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; }
   .m-ico-live::before {
@@ -2595,16 +2602,22 @@
       margin: 0 auto;
       flex-shrink: 0;
       box-sizing: border-box;
+      /* Promote stage to its own GPU layer to prevent flicker */
+      transform: translateZ(0);
+      contain: layout style;
     }
     @supports not (zoom: 1) {
       .stage {
-        transform: scale(var(--stage-zoom));
+        transform: scale(var(--stage-zoom)) translateZ(0);
         transform-origin: top center;
         margin: 0 auto;
         left: 0;
       }
     }
-    .musku-img, .glow-core { will-change: transform; max-width: 90vw; max-height: 90vw; box-sizing: border-box; }
+    /* GPU composite all animated ring/energy elements to prevent repaint flicker */
+    .musku-img, .glow-core { will-change: transform; max-width: 90vw; max-height: 90vw; box-sizing: border-box; transform: translate(-50%,-50%) translateZ(0); }
+    .ring, .energy, .energy2 { will-change: transform; transform: translate(-50%,-50%) translateZ(0); }
+
 
     .eq { height: 26px; }
     .btn {
