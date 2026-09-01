@@ -3,6 +3,7 @@
 Run this file directly: python app.py
 Serves Web UI on http://localhost:8000 and Live Voice WebSocket on ws://0.0.0.0:8770/live.
 100% self-contained inside musku-2.0 directory — ready for deployment.
+BUILD_VERSION = "2.0.1-v2026_09_01_1037"
 """
 from __future__ import annotations
 
