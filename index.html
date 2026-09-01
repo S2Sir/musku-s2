@@ -7209,6 +7209,38 @@ window._muskuCheckAudioIdle = function () {
       return btoa(bin);
     }
 
+    // Helper: always get a FRESH Firebase ID token (force refresh=true for WebSocket auth).
+    // If Firebase not available, returns cached token. This prevents "auth failed" on token expiry.
+    function _getFreshToken() {
+      return new Promise(function(resolve) {
+        try {
+          if (typeof firebase !== "undefined" && firebase.apps && firebase.apps.length && firebase.auth().currentUser) {
+            firebase.auth().currentUser.getIdToken(true).then(function(t) {
+              try { localStorage.setItem("musku_id_token", t); } catch(e) {}
+              resolve(t);
+            }).catch(function() {
+              // force-refresh failed — use cached
+              resolve(localStorage.getItem("musku_id_token") || "");
+            });
+          } else {
+            resolve(localStorage.getItem("musku_id_token") || "");
+          }
+        } catch(e) {
+          resolve(localStorage.getItem("musku_id_token") || "");
+        }
+      });
+    }
+
+    function _buildWsUrl(tok) {
+      var base = liveWsUrl.split("?")[0];
+      var uid = (typeof getMuskuUid==="function"?getMuskuUid():(window.getMuskuUid?window.getMuskuUid():"owner"));
+      var k = (typeof getMuskuApiKey==="function"?getMuskuApiKey():(localStorage.getItem("musku_api_key")||""));
+      var url = base + "?uid=" + encodeURIComponent(uid);
+      if (k) url += "&key=" + encodeURIComponent(k);
+      if (tok) url += "&token=" + encodeURIComponent(tok);
+      return url;
+    }
+
     function connectLiveWs() {
       if (!liveWsOn) return Promise.reject(new Error("live ws disabled"));
       if (liveWs && liveWs.readyState === WebSocket.OPEN) return Promise.resolve();
@@ -7218,50 +7250,40 @@ window._muskuCheckAudioIdle = function () {
           liveWs.addEventListener("error", function () { reject(new Error("Live WS fail")); }, { once: true });
         });
       }
-      // WS URL — use muskuQuery (per-uid key) + cached token; Live WS fallback allows owner if token stale (HTTP uses fresh token)
-      return new Promise(function (resolve, reject) {
-        var _wsUrl = liveWsUrl;
-        if (_wsUrl.indexOf("uid=") < 0) {
-          _wsUrl = _wsUrl.split("?")[0] + (_wsUrl.indexOf("?") >= 0 ? "&" : "?") + muskuQuery();
-        } else {
-          // Refresh per-uid key in URL (user may have changed key)
-          try{
-            var base = liveWsUrl.split("?")[0];
-            var uid = (typeof getMuskuUid==="function"?getMuskuUid():(window.getMuskuUid?window.getMuskuUid():"owner"));
-            var k = (typeof getMuskuApiKey==="function"?getMuskuApiKey():(localStorage.getItem("musku_api_key")||""));
-            var t = (typeof getMuskuToken==="function"?getMuskuToken():(window.getMuskuToken?window.getMuskuToken():""));
-            _wsUrl = base + "?uid=" + encodeURIComponent(uid);
-            if(k) _wsUrl += "&key=" + encodeURIComponent(k);
-            if(t) _wsUrl += "&token=" + encodeURIComponent(t);
-          }catch(e){}
-        }
-        try {
-          liveWs = new WebSocket(_wsUrl);
-          window.muskuLiveWs = liveWs;
-        } catch (ex) {
-          reject(ex);
-          return;
-        }
-        liveWs.onopen = function () {
-          window.muskuLiveWs = liveWs;
-          if (window.muskuResumeAudio) window.muskuResumeAudio();
-          resolve();
-        };
-        liveWs.onerror = function () {
-          console.warn("Live WS (ws://127.0.0.1:8770/live) not active, silently falling back to Web Voice mode.");
-          reject(new Error("Live WS connect fail"));
-        };
-        liveWs.onclose = function () {
-          liveWs = null;
-          window.muskuLiveWs = null;
-          var _shouldReconnect = false;
-          try{ _shouldReconnect = !!window._muskuVoiceActiveFlag || !!window._muskuLocalActive || (typeof isVoiceActive==="function" && isVoiceActive()); }catch(e){ _shouldReconnect = !!window._muskuVoiceActiveFlag; }
-          if (liveWsOn && _shouldReconnect) {
-            setTimeout(function () {
-              connectLiveWs().catch(function () {});
-            }, 400);
+      // PERMANENT FIX: always force-refresh Firebase token before connecting to prevent "auth failed"
+      return _getFreshToken().then(function(freshToken) {
+        return new Promise(function (resolve, reject) {
+          var _wsUrl;
+          try { _wsUrl = _buildWsUrl(freshToken); } catch(e) { _wsUrl = liveWsUrl; }
+          try {
+            liveWs = new WebSocket(_wsUrl);
+            window.muskuLiveWs = liveWs;
+          } catch (ex) {
+            reject(ex);
+            return;
           }
-        };
+          liveWs.onopen = function () {
+            window.muskuLiveWs = liveWs;
+            if (window.muskuResumeAudio) window.muskuResumeAudio();
+            resolve();
+          };
+          liveWs.onerror = function () {
+            console.warn("Live WS connect failed — falling back.");
+            reject(new Error("Live WS connect fail"));
+          };
+          liveWs.onclose = function (ev) {
+            liveWs = null;
+            window.muskuLiveWs = null;
+            var _shouldReconnect = false;
+            try{ _shouldReconnect = !!window._muskuVoiceActiveFlag || !!window._muskuLocalActive || (typeof isVoiceActive==="function" && isVoiceActive()); }catch(e){ _shouldReconnect = !!window._muskuVoiceActiveFlag; }
+            if (liveWsOn && _shouldReconnect) {
+              // PERMANENT FIX: auth failed (code 1008) pe fresh token ke saath reconnect karo
+              var _delay = (ev && ev.code === 1008) ? 800 : 400;
+              setTimeout(function () {
+                connectLiveWs().catch(function () {});
+              }, _delay);
+            }
+          };
         liveWs.onmessage = function (ev) {
           try {
             var msg = JSON.parse(ev.data);
@@ -8371,8 +8393,8 @@ window._muskuCheckAudioIdle = function () {
         return;
       }
       try{ window.GreetingController.set("WS_READY"); window.GreetingController.log("WS", true, "OPEN"); }catch(e){}
-      // 3. Wait GEMINI_READY (single greeting event, HTTP queue covers race)
-      window.GreetingController.waitGeminiReady(8000).then(function(){
+      // 3. Wait GEMINI_READY — 14s timeout (Railway cold start ~5-8s, slow mobile network ke liye)
+      window.GreetingController.waitGeminiReady(14000).then(function(){
         try{ window.GreetingController.set("GREETING_SENDING"); window.GreetingController.log("GREETING", true, "ONE event: "+greet); }catch(e){}
         window.muskuLiveWs.send(JSON.stringify({ type:"text", text: "[INTERNAL - START GREETING: " + greet + "]" }));
         try{ window.GreetingController.set("GREETING_ACTIVE"); }catch(e){}
@@ -8382,12 +8404,43 @@ window._muskuCheckAudioIdle = function () {
           if (!audioBusy) try{ resumeListening(); }catch(e){}
         }, 600);
       }).catch(function(err){
+        // PERMANENT FIX: Gemini timeout pe immediately reconnect karo (Railway cold start slow hoga)
         try{ window.GreetingController.set("GREETING_FAILED"); window.GreetingController.log("GREETING", false, err && err.message); }catch(e){}
-        setStatus("error", "Gemini not ready");
+        var _stillActive = !!window._muskuVoiceActiveFlag || !!window._muskuLocalActive;
+        if (_stillActive) {
+          setStatus("thinking", "Reconnecting...");
+          // Close stale WS, reconnect fresh
+          try{ if(liveWs){ liveWs.onclose=null; liveWs.close(); liveWs=null; window.muskuLiveWs=null; } }catch(e){}
+          setTimeout(function(){
+            if (window._muskuVoiceActiveFlag || window._muskuLocalActive) {
+              connectLiveWs().then(function(){
+                setStatus("thinking", "Connecting...");
+                window.GreetingController.waitGeminiReady(12000).then(function(){
+                  if (window.muskuLiveWs && window.muskuLiveWs.readyState === WebSocket.OPEN) {
+                    window.muskuLiveWs.send(JSON.stringify({ type:"text", text: "[INTERNAL - START GREETING: " + greet + "]" }));
+                    try{ window.GreetingController.set("GREETING_ACTIVE"); }catch(e){}
+                    setTimeout(function(){ try{ resumeListening(); }catch(e){}; }, 600);
+                  }
+                }).catch(function(){ setStatus("error", "Gemini not ready — check API key"); });
+              }).catch(function(){ setStatus("error", "Connection failed — retry karein"); });
+            }
+          }, 1500);
+        } else {
+          setStatus("error", "Gemini not ready");
+        }
       });
     }).catch(function (err) {
+      // PERMANENT FIX: WS connect fail pe bhi auto-retry (500ms baad)
       try{ window.GreetingController.set("WS_FAILED"); window.GreetingController.log("WS", false, err && err.message); }catch(e){}
-      setStatus("error", "WS connect fail");
+      var _stillOn = !!window._muskuVoiceActiveFlag || !!window._muskuLocalActive;
+      if (_stillOn) {
+        setStatus("thinking", "Reconnecting...");
+        setTimeout(function(){
+          if (window._muskuVoiceActiveFlag || window._muskuLocalActive) connectLiveWs().catch(function(){});
+        }, 1000);
+      } else {
+        setStatus("error", "WS connect fail");
+      }
     });
   }
   function stopAll() {
