@@ -8304,10 +8304,16 @@ window._muskuCheckAudioIdle = function () {
     if (typeof window.updateChatTyping === "function") window.updateChatTyping(true);
     window._greetAudioPlayed = false;
 
-    // 1. Create/Resume AudioContext (24kHz path) — must be in user gesture
+    // 1. Create/Resume AudioContext (24kHz path) — MUST be inside user gesture for mobile
     window._greetingGeminiReady = false;
-    if (window.muskuResumeAudio) {
-      try{ window.muskuResumeAudio(); window.GreetingController.log("AUDIO_CTX", true, JSON.stringify(window._muskuGetAudioState ? window._muskuGetAudioState() : {})); }catch(e){ window.GreetingController.log("AUDIO_CTX", false, e.message); }
+    try {
+      // Mobile browsers (Android Chrome, iOS Safari) block WebAudio UNTIL a silent buffer is played
+      // inside a user gesture (click/touchend). This MUST happen synchronously here.
+      if (window.unlockMobileWebAudio) window.unlockMobileWebAudio();
+      if (window.muskuResumeAudio) window.muskuResumeAudio();
+      try{ window.GreetingController.log("AUDIO_CTX", true, JSON.stringify(window._muskuGetAudioState ? window._muskuGetAudioState() : {})); }catch(e){}
+    } catch(e) {
+      try{ window.GreetingController.log("AUDIO_CTX", false, e.message); }catch(_){}
     }
 
     // Mic separate — parallel, not blocking greeting
@@ -8340,7 +8346,8 @@ window._muskuCheckAudioIdle = function () {
           try{ if(location.hostname.endsWith("vercel.app") || location.hostname==="musku-ai.web.app") { /* prod: redirect */ setTimeout(function(){ location.href="signup.html"; }, 800); } }catch(e){}
           return;
         }
-        var _apiBase = (window.MUSKU_BACKEND_URL || localStorage.getItem("musku_backend_url") || "").trim().replace(/\/+$/, "");
+        var _fallbackOrigin = (typeof location !== "undefined" && location.protocol && location.protocol.indexOf("http") === 0) ? location.origin : "https://musku-s2-production.up.railway.app";
+        var _apiBase = (window.MUSKU_BACKEND_URL || localStorage.getItem("musku_backend_url") || _fallbackOrigin).trim().replace(/\/+$/, "");
         return fetch(_apiBase + "/api/start",{method:"POST", headers:{"Content-Type":"application/json", "Authorization": "Bearer "+_tok}, body:JSON.stringify({uid:_uid, token:_tok, key:_key, greet:greet, script:greet})}).then(function(resp){
           if(resp.status===401){
             window.GreetingController.log("HTTP_QUEUE", false, "401 unauthorized — redirect to signup");

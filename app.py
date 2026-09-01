@@ -152,7 +152,10 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        if self.path in ("/api/start", "/api/start/"):
+        clean_p = self.path.split("?")[0].rstrip("/")
+        if clean_p in ("/api/start", ""):
+            clean_p = "/api/start"
+        if clean_p == "/api/start":
             # Size cap
             clen = int(self.headers.get("Content-Length", 0) or 0)
             if clen > MAX_API_BODY:
@@ -345,8 +348,15 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps({"error": "not found"}).encode("utf-8"))
 
     def do_GET(self):
+        clean_p = self.path.split("?")[0].rstrip("/")
+        if clean_p in ("/api/start", "/api/start/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
+            return
         # Health check for PaaS (RunxBuild/HF/Render) - must be 200 without auth
-        if self.path in ("/health", "/health/", "/api/health", "/api/health/"):
+        if clean_p in ("/health", "/api/health"):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
