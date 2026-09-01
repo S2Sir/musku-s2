@@ -7857,8 +7857,12 @@ window._muskuCheckAudioIdle = function () {
     var v = langInp.value || "hinglish";
     try { localStorage.setItem(LANG_STORE, v); } catch (e) {}
     SYSTEM_PROMPT = buildSystemPrompt(); // persona me language turant update
-    // Chalu recognition hai to naye locale se restart karo
-    if (active && !busy) { stopRecog(); setTimeout(startRecog, 300); }
+    // Chalu recognition hai to naye locale se restart karo (only in legacy non-WS mode)
+    if (active && !busy) {
+      stopRecog();
+      var liveOn = !!window._muskuLocalActive || !!window._muskuVoiceActiveFlag || (window.muskuLiveWs && window.muskuLiveWs.readyState === WebSocket.OPEN);
+      if (!liveOn) setTimeout(startRecog, 300);
+    }
     var label = v === "english" ? "English" : v === "hindi" ? "Hindi" : "Hinglish";
     window.showMuskuAlert && window.showMuskuAlert("info", "Language switched",
       "Ab main aapse " + label + " me baat karungi.");
@@ -8205,6 +8209,15 @@ window._muskuCheckAudioIdle = function () {
   }
   window.handleUserText = handleUserText;
   function resumeListening() {
+    // In Live WS mode, audio capture is handled silently via Web Audio getUserMedia -> WebSocket -> Gemini.
+    // SpeechRecognition (which causes Android OS "tung tung" beep/chime) MUST NEVER RUN in Live WS mode.
+    var liveActive = !!window._muskuLocalActive || !!window._muskuVoiceActiveFlag || (window.muskuLiveWs && window.muskuLiveWs.readyState === WebSocket.OPEN);
+    if (liveActive) {
+      if (typeof updateStatus === "function" && window.currentMuskuState !== "speaking") {
+        updateStatus("listening", "Listening...");
+      }
+      return;
+    }
     setStatus("idle", "Listening...");
     if (active && !busy) startRecog();
   }
@@ -8212,6 +8225,12 @@ window._muskuCheckAudioIdle = function () {
   /* ---------- STT ---------- */
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   function startRecog() {
+    // Suppress Web Speech STT completely if Live WS is active/connecting to prevent Android OS "tung tung" chimes
+    var liveActive = !!window._muskuLocalActive || !!window._muskuVoiceActiveFlag || (window.muskuLiveWs && (window.muskuLiveWs.readyState === WebSocket.OPEN || window.muskuLiveWs.readyState === WebSocket.CONNECTING));
+    if (liveActive) {
+      if (recog) { try { recog.stop(); } catch(e){} recog = null; }
+      return;
+    }
     if (!SR || recog || busy) return;
     shouldListen = true;
     try {
@@ -8234,14 +8253,18 @@ window._muskuCheckAudioIdle = function () {
       };
       recog.onend = function () {
         recog = null;
+        var liveOn = !!window._muskuLocalActive || !!window._muskuVoiceActiveFlag || (window.muskuLiveWs && window.muskuLiveWs.readyState === WebSocket.OPEN);
+        if (liveOn) return; // Never restart SpeechRecognition if Live WS is active
         if (shouldListen && active && !busy) {
-          setTimeout(startRecog, 250); // auto-restart
+          setTimeout(startRecog, 250); // auto-restart only in legacy non-WS mode
         } else if (active && !busy) {
           setStatus(active ? "listening" : "idle", active ? "Listening..." : "System Idle");
         }
       };
       recog.onerror = function (ev) {
         recog = null;
+        var liveOn = !!window._muskuLocalActive || !!window._muskuVoiceActiveFlag || (window.muskuLiveWs && window.muskuLiveWs.readyState === WebSocket.OPEN);
+        if (liveOn) return;
         if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
           stopAll();
           window.showMuskuAlert && window.showMuskuAlert("error", "Mic blocked", "Browser me mic permission allow karo.");
@@ -8331,6 +8354,7 @@ window._muskuCheckAudioIdle = function () {
 
   function startAll() {
     if (active) return;
+    stopRecog(); // Kill any legacy STT so Android never plays connect/disconnect beeps
     if (!getKey()) {
       window.showMuskuAlert && window.showMuskuAlert("warn", "API key missing", "API key is not connected properly, please enter correct API key.");
       avatarBoxOpen();
