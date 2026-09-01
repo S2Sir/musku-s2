@@ -3,7 +3,6 @@
 Run this file directly: python app.py
 Serves Web UI on http://localhost:8000 and Live Voice WebSocket on ws://0.0.0.0:8770/live.
 100% self-contained inside musku-2.0 directory — ready for deployment.
-BUILD_VERSION = "2.0.1-v2026_09_01_1037"
 """
 from __future__ import annotations
 
@@ -39,7 +38,7 @@ CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 MAX_API_BODY = 20 * 1024  # 20KB for /api/*
 MAX_CHAT_TEXT = 2000
 BLOCKED_STATIC = {"config.json", ".env", "crypto_utils.py", "musku_data", "musku_users", "musku_chat", ".git", "debug_greeting.log", "server.log", "server_err.log"}
-ALLOWED_STATIC_PREFIXES = ("/img/", "/js/", "/ui_theme.css", "/auth.js", "/auth.css", "/index.html", "/", "/favicon.ico", "/how-to-use.html", "/guide.html", "/user-guide.html", "/activate.html", "/admin.html", "/signup.html")
+ALLOWED_STATIC_PREFIXES = ("/img/", "/js/", "/ui_theme.css", "/auth.js", "/auth.css", "/index.html", "/", "/favicon.ico", "/how-to-use.html", "/activate.html", "/admin.html", "/signup.html")
 
 # CORS allowlist (comma-separated env). Empty => deny except same-origin. Use * only for local dev if explicitly set.
 def _allowed_origins():
@@ -61,9 +60,6 @@ def _cors_origin(request_origin: str) -> str:
         return request_origin
     # RunxBuild / PaaS: allow any *.runxbuild.app
     if request_origin and (request_origin.endswith(".runxbuild.app") or ".runxbuild." in request_origin):
-        return request_origin
-    # Railway PaaS: allow any *.railway.app or *.up.railway.app
-    if request_origin and (".railway.app" in request_origin or ".up.railway.app" in request_origin):
         return request_origin
     # no Origin header (same-origin fetch / curl) => allow
     if not request_origin:
@@ -386,27 +382,15 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "not found"}).encode("utf-8"))
                 return
-        if clean_p in ("/guide", "/guide.html", "/user-guide", "/user-guide.html"):
-            self.path = "/how-to-use.html"
         if self.path in ("/", ""):
             self.path = "/index.html"
         return super().do_GET()
 
-    def end_headers(self):
-        clean_p = self.path.split("?")[0]
-        if clean_p.endswith(".html") or clean_p in ("/", ""):
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
-        else:
-            self.send_header("Cache-Control", "public, max-age=60")
-        super().end_headers()
-
 
 def start_http_server():
     http.server.ThreadingHTTPServer.allow_reuse_address = True
-    with http.server.ThreadingHTTPServer(("0.0.0.0", PORT), MuskuHTTPRequestHandler) as httpd:
-        print(f"[MUSKU 2.0 Web] Server live at http://0.0.0.0:{PORT}")
+    with http.server.ThreadingHTTPServer(("", PORT), MuskuHTTPRequestHandler) as httpd:
+        print(f"[MUSKU 2.0 Web] Server live at http://localhost:{PORT}")
         httpd.serve_forever()
 
 
@@ -422,8 +406,6 @@ def _serve_static(environ, start_response, rel_path):
     if rel_path not in ("/", "", "/index.html") and not any(rel_path.startswith(p) for p in ALLOWED_STATIC_PREFIXES):
         if ".." in rel_path or "/." in rel_path:
             return None
-    if rel_path in ("/guide", "/guide.html", "/user-guide", "/user-guide.html"):
-        rel_path = "/how-to-use.html"
     if rel_path in ("", "/"):
         rel_path = "/index.html"
     # Normalize and prevent path traversal outside BASE_DIR
@@ -440,11 +422,10 @@ def _serve_static(environ, start_response, rel_path):
         return None
     req_origin = environ.get("HTTP_ORIGIN", "")
     allowed_origin = _cors_origin(req_origin)
-    cache_val = "no-cache, must-revalidate" if (mime and "html" in mime) else "public, max-age=120"
     headers = [
         ("Content-Type", mime),
         ("Content-Length", str(len(data))),
-        ("Cache-Control", cache_val),
+        ("Cache-Control", "public, max-age=3600"),
         ("X-Content-Type-Options", "nosniff"),
         ("X-Frame-Options", "DENY"),
     ]
@@ -456,7 +437,7 @@ def _serve_static(environ, start_response, rel_path):
 
 
 def handler(environ, start_response):
-    """WSGI entrypoint for Vercel / Python runtime."""
+    """WSGI entrypoint for Vercel Python serverless runtime."""
     path = environ.get("PATH_INFO", "/")
     method = environ.get("REQUEST_METHOD", "GET")
     # Health check for PaaS (RunxBuild) - before auth
@@ -657,22 +638,7 @@ def handler(environ, start_response):
     start_response("404 Not Found", [("Content-Type", "application/json")])
     return [json.dumps({"error": "not found"}).encode("utf-8")]
 
-_ws_started = False
-_ws_lock = threading.Lock()
-
-def _ensure_ws_started():
-    global _ws_started
-    if not _ws_started:
-        with _ws_lock:
-            if not _ws_started:
-                try:
-                    if not getattr(browser_live_ws, "running", False):
-                        browser_live_ws.start()
-                except Exception:
-                    pass
-                _ws_started = True
-
-# Top-level WSGI entrypoint for Gunicorn / Vercel
+# Vercel top-level app alias
 app = handler
 
 
@@ -680,37 +646,44 @@ def main():
     print("==================================================")
     print("MUSKU 2.0 - Web AI Companion Server")
     print("==================================================")
-    print(f"[MUSKU] Binding HTTP server on 0.0.0.0:{PORT}")
+    cfg = load_config()
+    print(f"User Name: {cfg.get('user_name', 'aap')}")
+    print(f"Language: {cfg.get('language', 'hinglish')}")
 
-    # CRITICAL FOR RAILWAY PaaS: Start HTTP server FIRST on a daemon thread
-    # so the port is listening immediately for Railway health checks.
-    http_thread = threading.Thread(target=start_http_server, daemon=True, name="MuskuHTTP")
-    http_thread.start()
-    print(f"[MUSKU] HTTP server thread started on 0.0.0.0:{PORT}")
+    # PaaS single-port detection (RunxBuild/HF/Render): if WS port == HTTP PORT, let WS server handle HTTP via process_request
+    try:
+        from live.voice_config import BROWSER_LIVE_WS_PORT as _ws_port
+        _single_port = (int(_ws_port) == int(PORT))
+    except Exception:
+        _single_port = False
 
-    # Now start Live WebSocket Voice Server (non-critical for initial load)
+    # Start Live WebSocket Voice Server on ws://0.0.0.0:PORT/live (single-port) or :8770 (local)
     try:
         browser_live_ws.start()
-        print(f"[LiveWS] Voice WebSocket started")
+        if _single_port:
+            print(f"[Live Voice WS+HTTP] Single-port mode on 0.0.0.0:{PORT} (WS /live + HTTP /)")
+        else:
+            print(f"[Live Voice WS] Server listening on ws://0.0.0.0:{_ws_port}/live")
     except Exception as e:
-        print(f"[LiveWS Warning]: {e}")
+        print(f"[Live WS Warning]: {e}")
 
-    try:
-        cfg = load_config()
-        print(f"User Name: {cfg.get('user_name', 'aap')}")
-        print(f"Language: {cfg.get('language', 'hinglish')}")
-    except Exception as e:
-        print(f"[Config Warning]: {e}")
+    # Start Web Asset Server on http://localhost:PORT (skip if single-port, WS handles HTTP)
+    if not _single_port:
+        http_thread = threading.Thread(target=start_http_server, daemon=True)
+        http_thread.start()
+        print(f"\nMUSKU 2.0 Web is 100% Ready!")
+        print(f"Open in browser: http://localhost:{PORT}\n")
+    else:
+        print(f"\nMUSKU 2.0 Web (single-port) is 100% Ready!")
+        print(f"Open in browser: http://localhost:{PORT}  (Live WS wss://host:{PORT}/live)\n")
 
-    print(f"\nMUSKU 2.0 Web is 100% Ready! Open: http://0.0.0.0:{PORT}\n")
-
-    # Block main thread forever (daemon threads keep running)
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         print("\n👋 MUSKU Web Server stopping...")
         browser_live_ws.stop()
+        sys.exit(0)
 
 
 if __name__ == "__main__":

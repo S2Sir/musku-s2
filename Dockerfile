@@ -20,5 +20,5 @@ COPY . .
 ENV PORT=8000
 EXPOSE 8000
 
-# Start MUSKU 2.0 Server
+# Start MUSKU 2.0 single-port Full-Stack Server
 CMD ["python", "app.py"]
