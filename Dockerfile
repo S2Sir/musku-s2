@@ -20,5 +20,5 @@ COPY . .
 ENV PORT=8000
 EXPOSE 8000
 
-# Start MUSKU 2.0 Production Server
-CMD ["gunicorn", "app:app", "--workers", "2", "--bind", "0.0.0.0:8000", "--timeout", "120"]
+# Start MUSKU 2.0 Production Server (dynamic PORT binding for Railway/CloudRun PaaS)
+CMD sh -c "gunicorn app:app --workers 2 --bind 0.0.0.0:${PORT:-8000} --timeout 120"
