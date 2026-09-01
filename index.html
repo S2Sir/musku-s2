@@ -6098,7 +6098,7 @@ window.updateChatTyping = function (on) {
     if (!gb) return;
     function openGuide(e) {
       if (e) { e.preventDefault(); e.stopPropagation(); }
-      location.href = "how-to-use.html";
+      location.href = "how-to-use.html?v=s2_2026";
     }
     gb.addEventListener("click", openGuide);
     gb.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") openGuide(e); });
