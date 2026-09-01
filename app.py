@@ -456,7 +456,8 @@ def _serve_static(environ, start_response, rel_path):
 
 
 def handler(environ, start_response):
-    """WSGI entrypoint for Vercel Python serverless runtime."""
+    """WSGI entrypoint for Vercel / Gunicorn Python runtime."""
+    _ensure_ws_started()
     path = environ.get("PATH_INFO", "/")
     method = environ.get("REQUEST_METHOD", "GET")
     # Health check for PaaS (RunxBuild) - before auth
@@ -657,15 +658,23 @@ def handler(environ, start_response):
     start_response("404 Not Found", [("Content-Type", "application/json")])
     return [json.dumps({"error": "not found"}).encode("utf-8")]
 
-# Vercel / Gunicorn top-level app alias
-app = handler
+_ws_started = False
+_ws_lock = threading.Lock()
 
-# Auto-start Live WS background server on WSGI load (Gunicorn / Uvicorn)
-try:
-    if not getattr(browser_live_ws, "running", False):
-        browser_live_ws.start()
-except Exception:
-    pass
+def _ensure_ws_started():
+    global _ws_started
+    if not _ws_started:
+        with _ws_lock:
+            if not _ws_started:
+                try:
+                    if not getattr(browser_live_ws, "running", False):
+                        browser_live_ws.start()
+                except Exception:
+                    pass
+                _ws_started = True
+
+# Top-level WSGI entrypoint for Gunicorn / Vercel
+app = handler
 
 
 def main():
