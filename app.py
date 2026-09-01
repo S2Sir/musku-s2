@@ -456,8 +456,7 @@ def _serve_static(environ, start_response, rel_path):
 
 
 def handler(environ, start_response):
-    """WSGI entrypoint for Vercel / Gunicorn Python runtime."""
-    _ensure_ws_started()
+    """WSGI entrypoint for Vercel / Python runtime."""
     path = environ.get("PATH_INFO", "/")
     method = environ.get("REQUEST_METHOD", "GET")
     # Health check for PaaS (RunxBuild) - before auth
