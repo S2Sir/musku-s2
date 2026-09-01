@@ -6955,17 +6955,12 @@ window._muskuCheckAudioIdle = function () {
   /* ---------- Backend & WebSocket URL Helpers (Universal for Web, Mobile, Firebase, DevTools) ---------- */
   function getMuskuBackendUrl() {
     var custom = (window.MUSKU_BACKEND_URL || localStorage.getItem("musku_backend_url") || "").trim();
-    // Auto-fix stale/typo railway URL (e.g. musku-s2.up.railway.app -> musku-s2-production.up.railway.app)
-    if (custom && custom.indexOf("musku-s2.up.railway.app") >= 0 && custom.indexOf("musku-s2-production.up.railway.app") < 0) {
-      custom = custom.replace("musku-s2.up.railway.app", "musku-s2-production.up.railway.app");
-      try { localStorage.setItem("musku_backend_url", custom); } catch(e) {}
-    }
     if (custom) return custom.replace(/\/+$/, "");
 
     var h = (typeof location !== "undefined" && location.hostname) ? location.hostname : "";
     var proto = (typeof location !== "undefined" && location.protocol === "https:") ? "https:" : "http:";
 
-    // If running directly on Railway production app:
+    // If running directly on Railway app:
     if (h.indexOf("railway.app") >= 0) {
       return location.origin;
     }
@@ -6974,7 +6969,7 @@ window._muskuCheckAudioIdle = function () {
       return proto + "//" + (h || "127.0.0.1") + (location.port ? ":" + location.port : ":8000");
     }
     // Running from Firebase Hosting (musku-ai.web.app), Vercel, DevTools, or Web Extension:
-    return "https://musku-s2-production.up.railway.app";
+    return "https://musku-s2.up.railway.app";
   }
   window.getMuskuBackendUrl = getMuskuBackendUrl;
 
@@ -8440,7 +8435,7 @@ window._muskuCheckAudioIdle = function () {
           try{ if(location.hostname.endsWith("vercel.app") || location.hostname==="musku-ai.web.app") { /* prod: redirect */ setTimeout(function(){ location.href="signup.html"; }, 800); } }catch(e){}
           return;
         }
-        var _apiBase = typeof getMuskuBackendUrl === "function" ? getMuskuBackendUrl() : "https://musku-s2-production.up.railway.app";
+        var _apiBase = typeof getMuskuBackendUrl === "function" ? getMuskuBackendUrl() : "https://musku-s2.up.railway.app";
         return fetch(_apiBase + "/api/start",{method:"POST", headers:{"Content-Type":"application/json", "Authorization": "Bearer "+_tok}, body:JSON.stringify({uid:_uid, token:_tok, key:_key, greet:greet, script:greet})}).then(function(resp){
           if(resp.status===401){
             window.GreetingController.log("HTTP_QUEUE", false, "401 unauthorized — redirect to signup");
