@@ -669,40 +669,17 @@ def main():
     print(f"User Name: {cfg.get('user_name', 'aap')}")
     print(f"Language: {cfg.get('language', 'hinglish')}")
 
-    # PaaS single-port detection (RunxBuild/HF/Render): if WS port == HTTP PORT, let WS server handle HTTP via process_request
-    try:
-        from live.voice_config import BROWSER_LIVE_WS_PORT as _ws_port
-        _single_port = (int(_ws_port) == int(PORT))
-    except Exception:
-        _single_port = False
-
-    # Start Live WebSocket Voice Server on ws://0.0.0.0:PORT/live (single-port) or :8770 (local)
+    # Start Live WebSocket Voice Server on daemon thread
     try:
         browser_live_ws.start()
-        if _single_port:
-            print(f"[Live Voice WS+HTTP] Single-port mode on 0.0.0.0:{PORT} (WS /live + HTTP /)")
-        else:
-            print(f"[Live Voice WS] Server listening on ws://0.0.0.0:{_ws_port}/live")
+        print(f"[Live Voice WS] Server active for voice companion")
     except Exception as e:
         print(f"[Live WS Warning]: {e}")
 
-    # Start Web Asset Server on http://localhost:PORT (skip if single-port, WS handles HTTP)
-    if not _single_port:
-        http_thread = threading.Thread(target=start_http_server, daemon=True)
-        http_thread.start()
-        print(f"\nMUSKU 2.0 Web is 100% Ready!")
-        print(f"Open in browser: http://localhost:{PORT}\n")
-    else:
-        print(f"\nMUSKU 2.0 Web (single-port) is 100% Ready!")
-        print(f"Open in browser: http://localhost:{PORT}  (Live WS wss://host:{PORT}/live)\n")
-
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\n👋 MUSKU Web Server stopping...")
-        browser_live_ws.stop()
-        sys.exit(0)
+    # Start Web Asset Server on http://0.0.0.0:PORT (main process for Railway PaaS)
+    print(f"\nMUSKU 2.0 Web is 100% Ready!")
+    print(f"Listening on http://0.0.0.0:{PORT}\n")
+    start_http_server()
 
 
 if __name__ == "__main__":
