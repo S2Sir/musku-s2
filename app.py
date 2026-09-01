@@ -422,10 +422,11 @@ def _serve_static(environ, start_response, rel_path):
         return None
     req_origin = environ.get("HTTP_ORIGIN", "")
     allowed_origin = _cors_origin(req_origin)
+    cache_val = "no-cache, must-revalidate" if (mime and "html" in mime) else "public, max-age=120"
     headers = [
         ("Content-Type", mime),
         ("Content-Length", str(len(data))),
-        ("Cache-Control", "public, max-age=3600"),
+        ("Cache-Control", cache_val),
         ("X-Content-Type-Options", "nosniff"),
         ("X-Frame-Options", "DENY"),
     ]
