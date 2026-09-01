@@ -2380,7 +2380,10 @@
      - Single column layout + bottom tab bar
      - Stage scaled via zoom so all concentric rings stay aligned
      =================================================================== */
-  :root { --nav-h: 62px; --stage-zoom: 1; }
+  :root { --nav-h: 60px; --stage-zoom: 1; }
+  /* Small phones — nav shorter to give content more room */
+  @media (max-height: 640px) { :root { --nav-h: 52px; } }
+  @media (max-height: 568px) { :root { --nav-h: 48px; } }
 
   html, body { height: 100%; }
   /* Safe-area — notch/tablet landscape me border clip na ho */
@@ -2422,14 +2425,14 @@
   }
 
 
-  /* Bottom navigation bar — 3 tabs: LIVE + CHAT + HISTORY */
+  /* Bottom navigation bar — 4 tabs: LIVE + SYSTEM + CHAT + HISTORY */
   .m-nav {
     position: fixed;
     left: 0; right: 0; bottom: 0;
     height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
     display: none;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     background: linear-gradient(180deg, rgba(14,12,30,.92), rgba(8,6,18,.98));
     border-top: 1px solid var(--border);
     box-shadow: 0 -6px 24px rgba(0,0,0,.5);
@@ -2442,11 +2445,12 @@
     border: none; background: transparent; cursor: pointer;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 2px; color: var(--dim); font-family: inherit;
-    font-size: 10px; font-weight: 800; letter-spacing: 1.2px;
+    font-size: clamp(8px, 2.2vw, 10px); font-weight: 800; letter-spacing: 0.8px;
     min-height: 44px; transition: color .2s ease;
     -webkit-tap-highlight-color: transparent;
+    padding: 0 2px;
   }
-  .m-tab .m-ico { font-size: 20px; line-height: 1; filter: grayscale(.6) opacity(.7); transition: filter .2s ease, transform .2s ease;
+  .m-tab .m-ico { font-size: clamp(16px, 5vw, 20px); line-height: 1; filter: grayscale(.6) opacity(.7); transition: filter .2s ease, transform .2s ease;
     width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; }
   .m-ico-live { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; }
   .m-ico-live::before {
@@ -2811,20 +2815,37 @@
 
   /* Very small phones — well-maintained borders & no overflow */
   @media (max-width: 360px) {
-    .ctitle { font-size: 27px; letter-spacing: 4px; }
-    .popover { width: min(92vw, 320px); right: 0; left: auto; max-width: calc(100vw - 16px); transform: none; }
-    .gauges { gap: 4px 6px; padding: 0 0 10px; }
-    .gauge { max-width: 56px; }
-    .gauge-cell { padding: 4px 2px 0; }
-    .chat-msg { margin-left: 6px; }
-    .chat-msg::after { left: -8px; }
-    .chat-msg-user .chat-row, .chat-msg-musku .chat-row { max-width: 82%; }
-    .chat-musku-header { padding: 4px 8px; }
-    .web-console-panel { width: min(500px, 92vw); right: calc(-1 * min(500px, 92vw) - 20px); }
+    .ctitle { font-size: clamp(18px, 5.5vw, 22px); letter-spacing: 2.5px; }
+    .csub { font-size: 8px; letter-spacing: 1.8px; }
+    .header-area, .chat-musku-header { padding: 6px 10px; margin-bottom: 4px; }
+    .avatar-icon { width: 36px; height: 36px; font-size: 13px; }
+    .popover { width: min(94vw, 300px); right: 0; left: auto; max-width: calc(100vw - 12px); transform: none; padding: 12px; }
+    .gauges { gap: 4px 5px; padding: 0 0 6px; }
+    .gauge { max-width: 48px; }
+    .gauge-cell { padding: 3px 2px 0; }
+    .chat-msg { margin-left: 4px; }
+    .chat-msg::after { left: -6px; }
+    .chat-msg-user .chat-row, .chat-msg-musku .chat-row { max-width: 88%; }
+    .chat-musku-header { padding: 6px 10px; }
+    .web-console-panel { width: min(500px, 94vw); right: calc(-1 * min(500px, 94vw) - 20px); }
+    .btn { padding: 10px 24px; font-size: 13px; min-height: 40px; }
+    .m-tab { font-size: 8px; letter-spacing: 0.4px; }
+    .m-tab .m-ico { font-size: 16px; width: 20px; height: 20px; }
   }
   @media (max-width: 320px) {
     .gauges { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .chat-input-bar { gap: 4px; padding: 6px; }
+    .chat-input-bar { gap: 4px; padding: 5px; }
+    .ctitle { font-size: 17px; letter-spacing: 1.5px; }
+    .btn { padding: 8px 18px; font-size: 12px; }
+  }
+  /* Short height mobile screens (iPhone SE, older Androids) — auto-compact layout */
+  @media (max-height: 640px) {
+    .header-area { padding: 4px 10px; margin-bottom: 2px; }
+    .ctitle { font-size: 18px; }
+    .csub { font-size: 7.5px; }
+    main.center { gap: 2px; }
+    .btn { min-height: 38px; padding: 8px 24px; font-size: 12px; }
+    .status { font-size: 11px; }
   }
   /* ===== HISTORY CALENDAR — PREMIUM BEST DESIGN ===== */
   .hist-cal { padding: 10px 14px 6px; border-bottom: 1px solid var(--border); }
