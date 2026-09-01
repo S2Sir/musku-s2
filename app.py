@@ -39,7 +39,7 @@ CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 MAX_API_BODY = 20 * 1024  # 20KB for /api/*
 MAX_CHAT_TEXT = 2000
 BLOCKED_STATIC = {"config.json", ".env", "crypto_utils.py", "musku_data", "musku_users", "musku_chat", ".git", "debug_greeting.log", "server.log", "server_err.log"}
-ALLOWED_STATIC_PREFIXES = ("/img/", "/js/", "/ui_theme.css", "/auth.js", "/auth.css", "/index.html", "/", "/favicon.ico", "/how-to-use.html", "/activate.html", "/admin.html", "/signup.html")
+ALLOWED_STATIC_PREFIXES = ("/img/", "/js/", "/ui_theme.css", "/auth.js", "/auth.css", "/index.html", "/", "/favicon.ico", "/how-to-use.html", "/guide.html", "/user-guide.html", "/activate.html", "/admin.html", "/signup.html")
 
 # CORS allowlist (comma-separated env). Empty => deny except same-origin. Use * only for local dev if explicitly set.
 def _allowed_origins():
@@ -383,6 +383,8 @@ class MuskuHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "not found"}).encode("utf-8"))
                 return
+        if clean_p in ("/guide", "/guide.html", "/user-guide", "/user-guide.html"):
+            self.path = "/how-to-use.html"
         if self.path in ("/", ""):
             self.path = "/index.html"
         return super().do_GET()
@@ -417,6 +419,8 @@ def _serve_static(environ, start_response, rel_path):
     if rel_path not in ("/", "", "/index.html") and not any(rel_path.startswith(p) for p in ALLOWED_STATIC_PREFIXES):
         if ".." in rel_path or "/." in rel_path:
             return None
+    if rel_path in ("/guide", "/guide.html", "/user-guide", "/user-guide.html"):
+        rel_path = "/how-to-use.html"
     if rel_path in ("", "/"):
         rel_path = "/index.html"
     # Normalize and prevent path traversal outside BASE_DIR
