@@ -2603,8 +2603,8 @@
         margin: 0 auto;
         left: 0;
       }
-    }
-    .musku-img, .glow-core { will-change: transform; max-width: 90vw; max-height: 90vw; box-sizing: border-box; }
+    .stage { transition: border-color .3s ease, box-shadow .3s ease; }
+    .musku-img, .glow-core { max-width: 90vw; max-height: 90vw; box-sizing: border-box; transform: translateZ(0); -webkit-backface-visibility: hidden; backface-visibility: hidden; }
 
     .eq { height: 26px; }
     .btn {
@@ -4180,34 +4180,34 @@
     if(mg){ mg.draggable = false; mg.addEventListener("dragstart", function(e){ e.preventDefault(); }); mg.addEventListener("contextmenu", function(e){ e.preventDefault(); }); }
   } catch(e){}
 
+  var _gifLoadToken = 0;
   function setGif(src) {
     var el = document.getElementById("muskuGif");
     if (!el) return;
     var clean = src.split("?")[0];
     if (el.getAttribute("data-gif") === clean) return;
-    // Preload off-screen then swap — old gif stays visible until new is decoded, so no black flicker.
+    
+    var curToken = ++_gifLoadToken;
     var tmp = new Image();
-    var doSwap = function(){
+    var doSwap = function () {
+      if (curToken !== _gifLoadToken) return; // Discard stale/racing loads
       el.setAttribute("data-gif", clean);
       el.onerror = function () {
         el.onerror = null;
-        if (el.getAttribute("data-gif") !== NORMAL_GIF) { el.removeAttribute("data-gif"); el.src = NORMAL_GIF; }
+        if (el.getAttribute("data-gif") !== NORMAL_GIF) {
+          el.removeAttribute("data-gif");
+          el.src = NORMAL_GIF;
+        }
       };
-      // instant swap without opacity dip — already decoded
-      if (el.decode) {
-        el.src = clean;
-        el.decode().catch(function(){}); // ensure decode, keep visible
-      } else {
-        el.src = clean;
-      }
+      el.src = clean;
     };
-    tmp.onload = doSwap;
-    tmp.onerror = doSwap;
-    tmp.src = clean;
+    
     if (tmp.complete) {
-      // already cached — swap immediately on next frame to avoid layout thrash
-      tmp.onload = null; tmp.onerror = null;
       doSwap();
+    } else {
+      tmp.onload = doSwap;
+      tmp.onerror = doSwap;
+      tmp.src = clean;
     }
   }
   // Avatar switch ke liye smooth crossfade — bina flickering ke
